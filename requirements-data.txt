@@ -1,0 +1,3 @@
+# Optional dependencies for exporting a Hugging Face handwriting dataset.
+datasets>=3.0
+Pillow>=10.0
