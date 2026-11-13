@@ -141,9 +141,17 @@ async def recognize(file: UploadFile = File(...)):
         )
 
     try:
-        crops = split_page_into_lines(image)
-        if not crops:
-            crops = [deskew_image(image)]
+        # A wide, shallow image is most likely already a cropped text line.
+        # Do not run page segmentation on it: projection-based segmentation can
+        # split cursive strokes into multiple fragments and destroy word shapes.
+        width, height = image.size
+        is_single_line = width >= 3 * height and height <= 350
+        if is_single_line:
+            crops = [image]
+        else:
+            crops = split_page_into_lines(image)
+            if not crops:
+                crops = [deskew_image(image)]
         results = [
             predict_line_details(model, crop, device=device, decoder="greedy")
             for crop in crops
