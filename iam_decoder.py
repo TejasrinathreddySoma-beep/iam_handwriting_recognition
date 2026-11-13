@@ -163,8 +163,9 @@ def _logadd(a: float, b: float) -> float:
 
 
 def _merge(mapping, prefix, blank=None, nonblank=None):
+    """Accumulate distinct CTC paths that collapse to the same output prefix."""
     old_blank, old_nonblank = mapping[prefix]
     mapping[prefix] = (
-        old_blank if blank is None else blank,
-        old_nonblank if nonblank is None else nonblank,
+        old_blank if blank is None else _logadd(old_blank, blank),
+        old_nonblank if nonblank is None else _logadd(old_nonblank, nonblank),
     )
