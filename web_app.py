@@ -38,6 +38,50 @@ def get_model_and_device():
     return load_model(model_path, device), device
 
 
+def auto_orient_image(image: Image.Image) -> Image.Image:
+    """Correct common 90/180/270 degree camera rotations before OCR."""
+    image = ImageOps.autocontrast(image.convert("L"), cutoff=1)
+    try:
+        osd = pytesseract.image_to_osd(image, output_type=Output.DICT)
+        rotation = int(osd.get("rotate", 0)) % 360
+        confidence = float(osd.get("orientation_conf", 0) or 0)
+        if rotation in (90, 180, 270) and confidence >= 1.0:
+            # Tesseract's OSD reports the clockwise correction angle.
+            return image.rotate(-rotation, expand=True, fillcolor=255)
+        if rotation == 0 and confidence >= 1.0:
+            return image
+    except (TesseractNotFoundError, OSError, RuntimeError, ValueError, KeyError):
+        pass
+
+    # OSD often struggles with handwriting. Compare both half-turns using
+    # word-level OCR evidence; never rotate solely on a weak character guess.
+    try:
+        upside_down = image.rotate(180, expand=True, fillcolor=255)
+        normal_score = _printed_orientation_score(image)
+        flipped_score = _printed_orientation_score(upside_down)
+        if flipped_score > normal_score * 1.15 and flipped_score >= 8.0:
+            return upside_down
+    except (TesseractNotFoundError, OSError, RuntimeError):
+        pass
+    return image
+
+
+def _printed_orientation_score(image: Image.Image) -> float:
+    data = pytesseract.image_to_data(
+        image, lang="eng", config="--oem 3 --psm 11", output_type=Output.DICT
+    )
+    score = 0.0
+    for word, raw_conf in zip(data.get("text", []), data.get("conf", [])):
+        word = word.strip()
+        try:
+            confidence = float(raw_conf)
+        except (TypeError, ValueError):
+            continue
+        if word and confidence >= 0:
+            score += confidence * min(len(word), 8) / 8
+    return score
+
+
 def try_printed_ocr(image: Image.Image):
     """Return Tesseract text and a simple confidence estimate, or None if unavailable."""
     try:
@@ -102,6 +146,7 @@ async def recognize(file: UploadFile = File(...)):
     try:
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert("L")
+        image = auto_orient_image(image)
     except Exception:
         raise HTTPException(status_code=400, detail="The uploaded file is not a readable image.")
 
@@ -315,6 +360,7 @@ async def upload_and_process(file: UploadFile = File(...)):
         temp_path.write_bytes(contents)
         if extension in image_extensions:
             image = Image.open(io.BytesIO(contents)).convert("L")
+            image = auto_orient_image(image)
             extracted, engine = recognize_uploaded_image(image)
         elif extension == ".pdf":
             reader = PdfReader(str(temp_path))
