@@ -77,3 +77,8 @@ Each saved upload keeps its original file available through the **Original** dow
 - Rich Text Format (`.rtf`)
 
 Export links are shown beside each item in the document library and in the recognition result. PDF generation uses ReportLab; Word generation uses python-docx. Install all dependencies with `python -m pip install -r requirements.txt`.
+
+
+### Camera-photo OCR preprocessing
+
+Image uploads now attempt automatic page orientation correction before OCR. The pipeline uses Tesseract orientation detection when available and compares 0°/180° printed-text evidence as a fallback. This helps with upside-down phone photos, but it does not guarantee accurate handwriting recognition. Perspective correction, page-boundary detection, and handwriting model accuracy remain dependent on image quality and the IAM model's training domain.
