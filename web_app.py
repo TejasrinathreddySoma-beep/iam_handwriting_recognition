@@ -166,3 +166,146 @@ async def recognize(file: UploadFile = File(...)):
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Recognition failed: {exc}")
+
+
+# Local document library: uploaded originals and extracted text are stored on this computer.
+import re
+import sqlite3
+import uuid
+from datetime import datetime, timezone
+from fastapi.responses import FileResponse
+from docx import Document as WordDocument
+from pypdf import PdfReader
+
+DATA_DIR = ROOT / "data"
+DOCUMENT_DIR = DATA_DIR / "documents"
+DB_PATH = DATA_DIR / "documents.db"
+MAX_DOCUMENT_BYTES = 25 * 1024 * 1024
+ALLOWED_DOCUMENTS = {".pdf", ".docx", ".txt", ".md"}
+
+
+def init_document_store():
+    DOCUMENT_DIR.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(DB_PATH) as db:
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS documents (
+                id TEXT PRIMARY KEY,
+                filename TEXT NOT NULL,
+                stored_name TEXT NOT NULL,
+                extension TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                extracted_text TEXT NOT NULL,
+                uploaded_at TEXT NOT NULL
+            )
+        """)
+        db.execute("CREATE INDEX IF NOT EXISTS idx_documents_uploaded ON documents(uploaded_at)")
+
+
+init_document_store()
+
+
+def extract_document_text(path: Path, extension: str) -> str:
+    if extension == ".pdf":
+        reader = PdfReader(str(path))
+        if reader.is_encrypted:
+            try:
+                if not reader.decrypt(""):
+                    raise ValueError("Password-protected PDFs are not supported.")
+            except Exception as exc:
+                raise ValueError("Password-protected PDFs are not supported.") from exc
+        pages = []
+        for page in reader.pages:
+            pages.append(page.extract_text() or "")
+        return "\\n\\n".join(pages).strip()
+    if extension == ".docx":
+        doc = WordDocument(str(path))
+        parts = [p.text for p in doc.paragraphs if p.text.strip()]
+        for table in doc.tables:
+            for row in table.rows:
+                parts.append(" | ".join(cell.text.strip() for cell in row.cells))
+        return "\\n".join(parts).strip()
+    return path.read_text(encoding="utf-8", errors="replace").strip()
+
+
+def document_row(row):
+    return {
+        "id": row[0], "filename": row[1], "extension": row[2],
+        "size_bytes": row[3], "uploaded_at": row[4],
+        "preview": (row[5][:280].replace("\\n", " ") + ("…" if len(row[5]) > 280 else "")),
+    }
+
+
+@app.post("/api/documents")
+async def add_document(file: UploadFile = File(...)):
+    filename = Path(file.filename or "document").name
+    extension = Path(filename).suffix.lower()
+    if extension not in ALLOWED_DOCUMENTS:
+        raise HTTPException(status_code=400, detail="Supported files: PDF, DOCX, TXT, and MD. Legacy .doc files must be saved as .docx first.")
+    contents = await file.read(MAX_DOCUMENT_BYTES + 1)
+    if len(contents) > MAX_DOCUMENT_BYTES:
+        raise HTTPException(status_code=413, detail="File is too large. Maximum size is 25 MB.")
+    if not contents:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty.")
+
+    doc_id = uuid.uuid4().hex
+    stored_name = doc_id + extension
+    stored_path = DOCUMENT_DIR / stored_name
+    try:
+        stored_path.write_bytes(contents)
+        extracted = extract_document_text(stored_path, extension)
+        if not extracted:
+            raise ValueError("No selectable text was found. This may be a scanned PDF; export it with OCR first.")
+        uploaded_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with sqlite3.connect(DB_PATH) as db:
+            db.execute(
+                "INSERT INTO documents (id, filename, stored_name, extension, size_bytes, extracted_text, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (doc_id, filename, stored_name, extension, len(contents), extracted, uploaded_at),
+            )
+    except Exception as exc:
+        stored_path.unlink(missing_ok=True)
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(status_code=400, detail=f"Could not read this document: {exc}")
+    return {"id": doc_id, "filename": filename, "characters": len(extracted), "message": "Document added to your local library."}
+
+
+@app.get("/api/documents")
+def list_documents(q: str = ""):
+    with sqlite3.connect(DB_PATH) as db:
+        if q.strip():
+            term = "%" + q.strip().replace("%", "\\%").replace("_", "\\_") + "%"
+            rows = db.execute(
+                "SELECT id, filename, extension, size_bytes, uploaded_at, extracted_text FROM documents WHERE filename LIKE ? ESCAPE '\\\\' OR extracted_text LIKE ? ESCAPE '\\\\' ORDER BY uploaded_at DESC LIMIT 100",
+                (term, term),
+            ).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT id, filename, extension, size_bytes, uploaded_at, extracted_text FROM documents ORDER BY uploaded_at DESC LIMIT 100"
+            ).fetchall()
+    return {"documents": [document_row(row) for row in rows], "count": len(rows)}
+
+
+@app.get("/api/documents/{document_id}")
+def get_document(document_id: str):
+    with sqlite3.connect(DB_PATH) as db:
+        row = db.execute(
+            "SELECT id, filename, extension, size_bytes, uploaded_at, extracted_text FROM documents WHERE id = ?",
+            (document_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    return {"id": row[0], "filename": row[1], "extension": row[2], "uploaded_at": row[4], "text": row[5]}
+
+
+@app.get("/api/documents/{document_id}/download")
+def download_document(document_id: str):
+    with sqlite3.connect(DB_PATH) as db:
+        row = db.execute("SELECT filename, stored_name FROM documents WHERE id = ?", (document_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    path = DOCUMENT_DIR / row[1]
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Stored file is missing.")
+    return FileResponse(path, filename=row[0], media_type="application/octet-stream")
+
+
