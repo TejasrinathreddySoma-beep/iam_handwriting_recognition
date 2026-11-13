@@ -49,3 +49,17 @@ This is a practical page-level automatic choice, not a perfect mixed-page segmen
 - `web_app.py`: automatic OCR backend.
 - `static/index.html`: upload-first interface.
 - `tests/`: IAM tests.
+
+
+## Personal document library
+
+The web app also includes a local document library. Add PDF, DOCX, TXT, or Markdown files; search filenames and extracted contents; open extracted text; and download the original file later.
+
+- Maximum upload size: 25 MB per file.
+- Original files and the SQLite catalogue are stored under `data/documents/` and `data/documents.db`.
+- The `data/` directory is ignored by Git, so private documents stay on your machine and are not committed to the repository.
+- Text-based PDFs and DOCX files are supported. A scanned/image-only PDF does not contain selectable text; run it through the OCR upload first, then save the recognized text as TXT, or add OCR-on-PDF processing in a future enhancement.
+- Legacy binary `.doc` files are not supported directly; open and save them as `.docx` in Word or LibreOffice.
+- This is a local, single-user library without login or cloud sync. Keep backups of your `data/` folder.
+
+Document endpoints: `POST /api/documents`, `GET /api/documents?q=...`, `GET /api/documents/{id}`, and `GET /api/documents/{id}/download`.
