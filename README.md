@@ -27,7 +27,7 @@ For handwriting, copy your already-trained compatible checkpoint into the reposi
 python -m uvicorn web_app:app --host 127.0.0.1 --port 8000
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000), upload an image, and recognition starts automatically. The result can be edited, copied, or downloaded. `/api/status` reports whether Tesseract and the local IAM checkpoint are available.
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000) and use the single upload area for images, PDFs, DOCX, TXT, or Markdown. The app extracts or recognizes text, saves the original and extracted text to your local library, and displays the result. `/api/status` reports whether Tesseract and the local IAM checkpoint are available.
 
 ## Automatic routing behavior
 
@@ -37,7 +37,7 @@ This is a practical page-level automatic choice, not a perfect mixed-page segmen
 
 ## API
 
-`POST /api/recognize`: multipart image field `file`. Engine selection and page mode are automatic. `GET /api/status`: engine/checkpoint availability.
+`POST /api/upload`: multipart file field `file`; processes supported images and documents and saves them to the library. `POST /api/recognize` remains available for image-only OCR clients. `GET /api/status`: engine/checkpoint availability.
 
 ## Main files
 
@@ -58,7 +58,7 @@ The web app also includes a local document library. Add PDF, DOCX, TXT, or Markd
 - Maximum upload size: 25 MB per file.
 - Original files and the SQLite catalogue are stored under `data/documents/` and `data/documents.db`.
 - The `data/` directory is ignored by Git, so private documents stay on your machine and are not committed to the repository.
-- Text-based PDFs and DOCX files are supported. A scanned/image-only PDF does not contain selectable text; run it through the OCR upload first, then save the recognized text as TXT, or add OCR-on-PDF processing in a future enhancement.
+- Text-based PDFs and DOCX files are supported. Scanned PDFs with no selectable text are rendered page by page and sent through the OCR pipeline (requires PyMuPDF).
 - Legacy binary `.doc` files are not supported directly; open and save them as `.docx` in Word or LibreOffice.
 - This is a local, single-user library without login or cloud sync. Keep backups of your `data/` folder.
 
