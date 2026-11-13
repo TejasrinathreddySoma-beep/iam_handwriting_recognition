@@ -61,7 +61,7 @@ def split_page_into_lines(image: Image.Image, min_line_height: int = 10) -> list
     threshold = max(1.0, arr.shape[1] * 0.001)
     active = projection >= threshold
     # Bridge tiny gaps within a text line but retain real inter-line whitespace.
-    gap_limit = max(2, min(6, int(arr.shape[0] * 0.004)))
+    gap_limit = max(4, min(12, int(arr.shape[0] * 0.012)))
     active_rows = np.flatnonzero(active)
     if not len(active_rows):
         return []
