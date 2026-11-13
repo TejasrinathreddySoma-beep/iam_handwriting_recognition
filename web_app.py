@@ -275,7 +275,7 @@ def list_documents(q: str = ""):
         if q.strip():
             term = "%" + q.strip().replace("%", "\\%").replace("_", "\\_") + "%"
             rows = db.execute(
-                "SELECT id, filename, extension, size_bytes, uploaded_at, extracted_text FROM documents WHERE filename LIKE ? ESCAPE '\\\\' OR extracted_text LIKE ? ESCAPE '\\\\' ORDER BY uploaded_at DESC LIMIT 100",
+                "SELECT id, filename, extension, size_bytes, uploaded_at, extracted_text FROM documents WHERE lower(filename) LIKE lower(?) OR lower(extracted_text) LIKE lower(?) ORDER BY uploaded_at DESC LIMIT 100",
                 (term, term),
             ).fetchall()
         else:
