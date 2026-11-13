@@ -21,6 +21,8 @@
 .actions{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}.btn{border:1px solid #555;border-radius:999px;padding:10px 17px;background:transparent;color:var(--text);cursor:pointer;font:inherit}.btn.primary{background:var(--accent);border-color:var(--accent);color:white}
 .footer{color:#777;font-size:11px;text-align:center;margin-top:24px}
 @media(max-width:760px){.layout{grid-template-columns:1fr}.sidebar{display:none}.content{padding-top:26px}.welcome h1{font-size:24px}}
+
+.library{margin-top:44px;border-top:1px solid #444;padding-top:28px}.library h2{font-size:19px;margin:0 0 5px}.library p{color:var(--muted);font-size:13px;margin:0}.library-tools{display:flex;gap:10px;margin:16px 0;flex-wrap:wrap}.library-tools input[type=search]{flex:1;min-width:180px;background:#2f2f2f;color:var(--text);border:1px solid #555;border-radius:10px;padding:10px 12px;font:inherit}.library-upload{position:relative;overflow:hidden;background:var(--accent);border-radius:999px;padding:10px 16px;cursor:pointer}.library-upload input{position:absolute;inset:0;opacity:0;cursor:pointer}.doc-message{font-size:13px;color:#9ddcc9;margin:8px 0}.doc-list{display:grid;gap:9px}.doc-card{border:1px solid #484848;border-radius:12px;padding:12px;display:flex;gap:12px;align-items:center;justify-content:space-between}.doc-name{font-weight:600;overflow-wrap:anywhere}.doc-meta,.doc-preview{font-size:12px;color:var(--muted)}.doc-preview{margin-top:3px}.doc-actions{display:flex;gap:7px;flex-shrink:0}.doc-actions button,.doc-actions a{font:inherit;font-size:12px;color:var(--text);background:#3c3c3c;border:1px solid #555;border-radius:18px;padding:6px 10px;text-decoration:none;cursor:pointer}.doc-viewer{margin-top:15px;border:1px solid #555;border-radius:12px;padding:13px}.doc-viewer-head{display:flex;justify-content:space-between;gap:12px;align-items:center}.doc-viewer pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;overflow:auto;font:13px/1.6 inherit;color:#ddd}@media(max-width:600px){.doc-card{align-items:flex-start;flex-direction:column}.doc-actions{flex-wrap:wrap}}
 </style></head><body>
 <div class="layout"><aside class="sidebar"><div class="brand"><span class="brand-mark">✍</span> Document OCR</div><div class="side-note">Automatic recognition<br>Printed text · Handwriting<br>CPU supported</div></aside>
 <main class="main"><div class="topbar">Automatic OCR · CPU supported</div><section class="content">
@@ -33,6 +35,12 @@
 </div>
 <section class="result" id="result"><h2>Recognized text</h2><div class="sub" id="summary"></div><textarea class="output" id="output" aria-label="Editable recognized text"></textarea>
 <div class="actions"><button class="btn" id="copy">Copy text</button><button class="btn" id="download">Download .txt</button><button class="btn primary" id="again">Upload another image</button></div></section>
+<section class="library">
+<div class="library-head"><div><h2>My document library</h2><p>Keep PDFs and Word documents here, search their contents, and reopen or download them later.</p></div></div>
+<div class="library-tools"><input id="docSearch" type="search" placeholder="Search document names or contents…"><label class="library-upload">＋ Add PDF / Word / text file<input id="docFile" type="file" accept=".pdf,.docx,.txt,.md"></label></div>
+<div id="docMessage" class="doc-message"></div><div id="docList" class="doc-list">Loading your library…</div>
+<div id="docViewer" class="doc-viewer" style="display:none"><div class="doc-viewer-head"><strong id="docTitle"></strong><button class="btn" id="docClose">Close</button></div><pre id="docText"></pre></div>
+</section>
 <div class="footer">Recognition is automatic. Please proofread important text.</div>
 </section></main></div>
 <script>
@@ -49,5 +57,17 @@ $('drop').addEventListener('dragover',e=>{e.preventDefault();$('drop').classList
 $('copy').onclick=async()=>{await navigator.clipboard.writeText($('output').value);$('copy').textContent='Copied ✓';setTimeout(()=>$('copy').textContent='Copy text',1300)};
 $('download').onclick=()=>{const url=URL.createObjectURL(new Blob([$('output').value],{type:'text/plain'}));const a=document.createElement('a');a.href=url;a.download='recognized_text.txt';a.click();URL.revokeObjectURL(url)};
 $('again').onclick=()=>{$('file').value='';$('preview').style.display='none';$('result').style.display='none';$('error').style.display='none';$('imagePreview').removeAttribute('src');};
-status();
+status();loadDocuments();
+
+async function loadDocuments(){
+ const q=$('docSearch').value.trim();
+ try{const r=await fetch('/api/documents?q='+encodeURIComponent(q));const d=await r.json();const root=$('docList');root.replaceChildren();
+ if(!d.documents.length){root.textContent='No saved documents yet. Add a PDF, DOCX, TXT, or Markdown file.';return;}
+ d.documents.forEach(doc=>{const card=document.createElement('div');card.className='doc-card';const info=document.createElement('div');const name=document.createElement('div');name.className='doc-name';name.textContent=doc.filename;const meta=document.createElement('div');meta.className='doc-meta';meta.textContent=doc.extension.toUpperCase()+' · '+(doc.size_bytes/1024).toFixed(1)+' KB · '+new Date(doc.uploaded_at).toLocaleString();const preview=document.createElement('div');preview.className='doc-preview';preview.textContent=doc.preview;info.append(name,meta,preview);const actions=document.createElement('div');actions.className='doc-actions';const open=document.createElement('button');open.textContent='Open text';open.onclick=()=>openDocument(doc.id);const download=document.createElement('a');download.textContent='Download';download.href='/api/documents/'+encodeURIComponent(doc.id)+'/download';actions.append(open,download);card.append(info,actions);root.append(card);});
+ }catch(e){$('docList').textContent='Could not load document library: '+e.message;}
+}
+async function openDocument(id){try{const r=await fetch('/api/documents/'+encodeURIComponent(id));const d=await r.json();if(!r.ok)throw new Error(d.detail||'Could not open document');$('docTitle').textContent=d.filename;$('docText').textContent=d.text;$('docViewer').style.display='block';$('docViewer').scrollIntoView({behavior:'smooth'});}catch(e){$('docMessage').textContent=e.message;}}
+$('docFile').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;$('docMessage').textContent='Adding '+file.name+'…';const form=new FormData();form.append('file',file);try{const r=await fetch('/api/documents',{method:'POST',body:form});const d=await r.json();if(!r.ok)throw new Error(d.detail||'Upload failed');$('docMessage').textContent=d.message+' Extracted '+d.characters+' characters.';await loadDocuments();}catch(err){$('docMessage').textContent=err.message;}finally{e.target.value='';}});
+$('docSearch').addEventListener('input',()=>loadDocuments());$('docClose').onclick=()=>$('docViewer').style.display='none';
+
 </script></body></html>
