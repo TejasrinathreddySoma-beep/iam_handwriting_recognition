@@ -184,13 +184,62 @@ The checkpoint `iam_crnn_ctc.pth` must be present in the repository root. The `/
 - Greedy CTC decoding is simple and fast, but beam search or a language model may improve difficult text.
 - Results can vary with handwriting style, scan quality, and dataset split. The published metrics above describe the supplied run, not a guarantee for arbitrary documents.
 
-## Future improvements
+## Implemented improvements
 
-- Add deskewing and more robust line segmentation for full-page scans.
-- Evaluate beam-search decoding and language-model rescoring.
-- Add inference confidence or uncertainty indicators.
-- Package the trained checkpoint as a versioned release asset.
-- Add tests for annotation parsing, image preprocessing, CTC lengths, and inference.
+### Deskewing and full-page line segmentation
+
+`iam_image.py` estimates small page rotation angles using horizontal ink projections, corrects skew, and extracts text lines using adaptive local-background thresholding and row projections. A projection-valley fallback handles some merged bands. This is designed for ordinary single-column pages; complex layouts still need a dedicated document-layout model.
+
+### Greedy and beam-search decoding
+
+`iam_decoder.py` includes greedy CTC decoding and prefix beam search. Beam search can optionally rescore character transitions with an add-one-smoothed character bigram model. Greedy remains the default for speed.
+
+Compare decoder quality on the official validation split:
+
+```bash
+python evaluate_decoders.py --beam-width 10
+```
+
+To test optional language-model rescoring, prepare a UTF-8 text corpus from permitted training text (do not use validation/test transcriptions to build the LM), then run:
+
+```bash
+python evaluate_decoders.py --beam-width 10 --language-model path/to/training_corpus.txt --lm-weight 0.25
+```
+
+The script writes `decoder_comparison.json` with greedy and beam CER. Tune beam width and LM weight on validation data only, then report final test results once.
+
+### Confidence and uncertainty indicators
+
+Prediction returns a confidence-like score with its interpretation. Greedy reports mean maximum per-frame probability; beam search reports a normalized sequence ranking score. Both are explicitly marked **uncalibrated** and must not be interpreted as a statistically calibrated probability that the transcription is correct. The web UI displays these values for each line.
+
+### Versioned checkpoint packaging
+
+The checkpoint packager validates the model's character mapping and image height, then creates a versioned ZIP with a model manifest:
+
+```bash
+python scripts/package_checkpoint.py --checkpoint iam_crnn_ctc.pth --version v1.0.0
+```
+
+After creating the archive, install and authenticate the GitHub CLI, then publish it as a release asset:
+
+```bash
+gh release create v1.0.0 dist/iam-crnn-ctc-v1.0.0.zip --title "IAM CRNN-CTC v1.0.0" --notes "Versioned IAM handwriting model and manifest."
+```
+
+The trained checkpoint is not stored in this source repository. Run training or supply your compatible local checkpoint before packaging. Do not commit the raw checkpoint into Git history.
+
+### Automated tests and continuous integration
+
+The `tests/` suite covers IAM annotation and split parsing, image preprocessing, deskew/page segmentation, CTC output and repeated-label lengths, decoder behavior, and inference confidence. GitHub Actions runs the test suite on pushes and pull requests to `main`.
+
+Install test dependencies and run locally:
+
+```bash
+python -m pip install -r requirements-dev.txt
+pytest -q
+```
+
+These additions provide implementation and evaluation tooling; beam/LM performance improvements must be measured on your validation data rather than assumed.
 
 ## References
 
