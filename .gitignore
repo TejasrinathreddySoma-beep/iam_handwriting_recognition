@@ -1,0 +1,10 @@
+# IAM dataset and generated artifacts (obtain dataset separately)
+data/
+*.pth
+*.pt
+*.ckpt
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
