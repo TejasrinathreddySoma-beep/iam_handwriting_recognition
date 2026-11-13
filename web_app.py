@@ -2,7 +2,7 @@
 from pathlib import Path
 from functools import lru_cache
 import io
-
+import pytesseract
 import torch
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -21,6 +21,44 @@ LANGUAGE_MODEL_PATH = ROOT / "language_model.txt"
 app = FastAPI(title="IAM Handwriting Reader")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+# Printed document recognition does not require the IAM checkpoint.
+if text_type == "printed":
+    try:
+        config = "--oem 3 --psm 3" if mode == "page" else "--oem 3 --psm 7"
+
+        recognized = pytesseract.image_to_string(
+            image,
+            lang="eng",
+            config=config,
+        )
+
+        lines = [
+            line.strip()
+            for line in recognized.splitlines()
+            if line.strip()
+        ]
+
+        return {
+            "lines": [
+                {
+                    "number": i + 1,
+                    "text": line,
+                    "confidence": None,
+                    "decoder": "tesseract",
+                }
+                for i, line in enumerate(lines)
+            ],
+            "count": len(lines),
+            "device": "CPU",
+            "model": "Tesseract OCR",
+            "text_type": "printed",
+        }
+
+    except pytesseract.pytesseract.TesseractNotFoundError:
+        raise HTTPException(
+            status_code=503,
+            detail="Tesseract is not installed or its executable path is incorrect."
+        )
 
 @lru_cache(maxsize=1)
 def get_model_and_device():
@@ -61,6 +99,7 @@ def status():
 @app.post("/api/recognize")
 async def recognize(
     file: UploadFile = File(...),
+    text_type: str = Form("handwriting"),
     mode: str = Form("page"),
     decoder: str = Form("greedy"),
     beam_width: int = Form(10),
@@ -68,6 +107,11 @@ async def recognize(
 ):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Please upload an image file.")
+    if text_type not in {"handwriting", "printed"}:
+        raise HTTPException(
+            status_code=400,
+            detail="text_type must be handwriting or printed."
+        )
     if mode not in {"line", "page"}:
         raise HTTPException(status_code=400, detail="mode must be 'line' or 'page'.")
     if decoder not in {"greedy", "beam"}:

@@ -45,61 +45,106 @@ def greedy_decode_with_confidence(log_probs: torch.Tensor, input_length: int) ->
         previous = token
     return "".join(output), confidence
 
-
 def prefix_beam_search(
-    log_probs: torch.Tensor,
-    input_length: int,
-    beam_width: int = 10,
-    language_model: CharacterNGramLM | None = None,
-    lm_weight: float = 0.0,
+        log_probs: torch.Tensor,
+        input_length: int,
+        beam_width: int = 10,
+        language_model: CharacterNGramLM | None = None,
+        lm_weight: float = 0.0,
 ) -> tuple[str, float]:
-    """Decode one [time, classes] log-probability matrix using CTC prefix beams.
-
-    The optional bigram LM is a lightweight rescoring prior. Tune lm_weight on
-    validation data; it is not applied unless a language-model file is supplied.
-    """
+    """Decode one [time, classes] log-probability matrix using CTC prefix beams."""
     if beam_width < 1:
         raise ValueError("beam_width must be positive")
+
     probs = log_probs[:input_length].detach().float().cpu()
     if not len(probs):
         return "", 0.0
-    # prefix -> (log probability ending blank, ending nonblank)
+
+    # Prefix -> (probability ending in blank, probability ending in nonblank)
     beams = {(): (0.0, -math.inf)}
+
     for frame in probs:
         next_beams = defaultdict(lambda: (-math.inf, -math.inf))
+
+        top_values, top_indices = torch.topk(
+            frame,
+            k=min(frame.numel(), max(beam_width * 2, 20)),
+        )
+
         for prefix, (p_blank, p_nonblank) in beams.items():
             total = _logadd(p_blank, p_nonblank)
-            _merge(next_beams, prefix, blank=_logadd(*next_beams[prefix][:1], total))
-            top_values, top_indices = torch.topk(frame, k=min(frame.numel(), max(beam_width * 2, 20)))
-            for logp, token_tensor in zip(top_values.tolist(), top_indices.tolist()):
+
+            # A blank can follow either blank or nonblank.
+            _merge(
+                next_beams,
+                prefix,
+                blank=total + frame[BLANK_ID].item(),
+            )
+
+            for logp, token_tensor in zip(
+                    top_values.tolist(), top_indices.tolist()
+            ):
                 token = int(token_tensor)
+
                 if token == BLANK_ID:
                     continue
+
                 char = ID_TO_CHAR.get(token)
                 if char is None:
                     continue
-                if prefix and prefix[-1] == token:
-                    # Repeating the last label without an intervening blank keeps the prefix.
-                    _merge(next_beams, prefix, nonblank=_logadd(next_beams[prefix][1], p_nonblank + logp))
-                    # A repeated label after blank extends the output.
-                    new_prefix = prefix + (token,)
-                    lm = _lm_increment(language_model, prefix, char) * lm_weight
-                    _merge(next_beams, new_prefix, nonblank=_logadd(next_beams[new_prefix][1], p_blank + logp + lm))
-                else:
-                    new_prefix = prefix + (token,)
-                    lm = _lm_increment(language_model, prefix, char) * lm_weight
-                    _merge(next_beams, new_prefix, nonblank=_logadd(next_beams[new_prefix][1], total + logp + lm))
-        beams = dict(sorted(
-            next_beams.items(),
-            key=lambda item: _logadd(*item[1]),
-            reverse=True,
-        )[:beam_width])
-    best_prefix, best_scores = max(beams.items(), key=lambda item: _logadd(*item[1]))
-    text = "".join(ID_TO_CHAR.get(token, "") for token in best_prefix)
-    # A decoder score is a ranking score, not a calibrated probability.
-    score = _logadd(*best_scores)
-    return text, float(math.exp(min(0.0, score / max(1, input_length))))
 
+                if prefix and prefix[-1] == token:
+                    # Same character without a blank: output stays unchanged.
+                    _merge(
+                        next_beams,
+                        prefix,
+                        nonblank=p_nonblank + logp,
+                    )
+
+                    # Same character after a blank: append another character.
+                    new_prefix = prefix + (token,)
+                    lm = (
+                            _lm_increment(language_model, prefix, char)
+                            * lm_weight
+                    )
+                    _merge(
+                        next_beams,
+                        new_prefix,
+                        nonblank=p_blank + logp + lm,
+                    )
+                else:
+                    # Different character: extend from either previous state.
+                    new_prefix = prefix + (token,)
+                    lm = (
+                            _lm_increment(language_model, prefix, char)
+                            * lm_weight
+                    )
+                    _merge(
+                        next_beams,
+                        new_prefix,
+                        nonblank=total + logp + lm,
+                    )
+
+        beams = dict(
+            sorted(
+                next_beams.items(),
+                key=lambda item: _logadd(*item[1]),
+                reverse=True,
+            )[:beam_width]
+        )
+
+    best_prefix, best_scores = max(
+        beams.items(),
+        key=lambda item: _logadd(*item[1]),
+    )
+
+    text = "".join(ID_TO_CHAR.get(token, "") for token in best_prefix)
+
+    # Ranking score, not a calibrated probability.
+    score = _logadd(*best_scores)
+    confidence = math.exp(min(0.0, score / max(1, input_length)))
+
+    return text, float(confidence)
 
 def _lm_increment(lm, prefix, character):
     if lm is None:

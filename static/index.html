@@ -25,6 +25,17 @@
 <div class="welcome"><h1>What would you like to read?</h1><p>Upload handwriting and turn it into editable text.</p><div class="status"><span class="pill" id="modelStatus">Checking model…</span><span class="pill" id="deviceStatus">Checking device…</span></div></div>
 <div class="composer">
 <div class="mode"><label><input type="radio" name="mode" value="page" checked> Whole page</label><label><input type="radio" name="mode" value="line"> Single text line</label></div>
+
+    <div class="mode">
+        <label>
+            <input type="radio" name="text_type" value="handwriting" checked>
+            Handwritten text (IAM)
+        </label>
+        <label>
+            <input type="radio" name="text_type" value="printed">
+            Printed text (Tesseract)
+        </label>
+    </div>
 <div class="mode"><label>Decoder <select id="decoder"><option value="greedy">Greedy (fast)</option><option value="beam">Beam search</option></select></label><label>Beam width <input id="beamWidth" type="number" min="1" max="100" value="10" style="width:64px"></label><label><input id="useLm" type="checkbox"> Use optional language model</label></div>
 <label class="drop" id="drop"><span><strong>＋ Add an image</strong><small>Drop a file here or browse · PNG, JPG, BMP, TIFF</small></span><input id="file" type="file" accept="image/*"></label>
 <div class="preview" id="preview"><img id="imagePreview" alt="Uploaded handwriting preview"></div>
