@@ -322,6 +322,7 @@ def recognize_handwriting_image(image: Image.Image):
 
 
 def recognize_uploaded_image(image: Image.Image):
+    image = auto_orient_image(image)
     printed = try_printed_ocr(image)
     if printed and printed["word_count"] >= 2 and printed["confidence"] >= 55:
         return "\\n".join(printed["lines"]), "Tesseract OCR"
@@ -360,7 +361,6 @@ async def upload_and_process(file: UploadFile = File(...)):
         temp_path.write_bytes(contents)
         if extension in image_extensions:
             image = Image.open(io.BytesIO(contents)).convert("L")
-            image = auto_orient_image(image)
             extracted, engine = recognize_uploaded_image(image)
         elif extension == ".pdf":
             reader = PdfReader(str(temp_path))
