@@ -33,14 +33,15 @@ class IAMCRNN(nn.Module):
         self.classifier = nn.Linear(hidden_size * 2, NUM_CLASSES)
 
     def forward(self, images):
-        features = self.cnn(images)
-        sequence = features.squeeze(2).transpose(1, 2)
+        features = self.cnn(images)                 # [B, 512, 1, T]
+        sequence = features.squeeze(2).transpose(1, 2)  # [B, T, 512]
         sequence, _ = self.sequence(sequence)
         return self.classifier(sequence).log_softmax(dim=2)
 
     @staticmethod
     def output_lengths(widths):
-        return (widths + 3) // 4
+        # Two 2x2 max-pooling layers use floor rounding for the width.
+        return widths // 4
 
 
 def greedy_decode(log_probs, input_lengths):
