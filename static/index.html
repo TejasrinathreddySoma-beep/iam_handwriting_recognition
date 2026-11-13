@@ -34,7 +34,7 @@
 <div class="spinner" id="spinner">Detecting text type and recognizing your document…</div><div class="error" id="error"></div>
 </div>
 <section class="result" id="result"><h2>Recognized text</h2><div class="sub" id="summary"></div><textarea class="output" id="output" aria-label="Editable recognized text"></textarea>
-<div class="actions"><button class="btn" id="copy">Copy text</button><button class="btn primary" id="again">Upload another file</button></div><div class="export-row"><span>Download recognized text as:</span><div id="resultExports" class="export-buttons"></div></div></section>
+<div class="actions"><button class="btn" id="copy">Copy text</button><button class="btn primary" id="again">Upload another file</button></div></section>
 <section class="library">
 <div class="library-head"><div><h2>My document library</h2><p>Keep PDFs and Word documents here, search their contents, and reopen or download them later.</p></div></div>
 <div class="library-tools"><input id="docSearch" type="search" placeholder="Search saved document names or contents…"></div>
@@ -55,7 +55,7 @@ $('copy').onclick=async()=>{await navigator.clipboard.writeText($('output').valu
 $('again').onclick=()=>{$('file').value='';$('preview').style.display='none';$('result').style.display='none';$('error').style.display='none';$('imagePreview').removeAttribute('src');};
 status();loadDocuments();
 
-function renderExports(target,id){const root=$(target);root.replaceChildren();['pdf','docx','txt','md','html','rtf'].forEach(fmt=>{const a=document.createElement('a');a.textContent=fmt.toUpperCase();a.href='/api/documents/'+encodeURIComponent(id)+'/export/'+fmt;a.download='';root.append(a);});}
+function renderExports(target,id){const root=$(target);root.replaceChildren();const select=document.createElement('select');select.className='doc-download';select.setAttribute('aria-label','Download recognized text in a format');select.innerHTML='<option value="">Download as…</option><option value="pdf">PDF</option><option value="docx">Word (DOCX)</option><option value="txt">Plain text (TXT)</option><option value="md">Markdown (MD)</option><option value="html">HTML</option><option value="rtf">Rich Text (RTF)</option>';select.onchange=()=>{if(!select.value)return;const a=document.createElement('a');a.href='/api/documents/'+encodeURIComponent(id)+'/export/'+select.value;a.download='';document.body.append(a);a.click();a.remove();select.value='';};root.append(select);}
 async function loadDocuments(){
  const q=$('docSearch').value.trim();
  try{const r=await fetch('/api/documents?q='+encodeURIComponent(q));const d=await r.json();const root=$('docList');root.replaceChildren();
