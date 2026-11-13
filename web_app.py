@@ -199,13 +199,13 @@ async def recognize(file: UploadFile = File(...)):
             if not crops:
                 crops = [deskew_image(image)]
         results = [
-            predict_line_details(model, crop, device=device, decoder="greedy")
+            predict_line_details(model, crop, device=device, decoder="beam", beam_width=15)
             for crop in crops
         ]
         return {
             "lines": [{"number": i + 1, **result} for i, result in enumerate(results)],
             "count": len(results),
-            "engine": "IAM CRNN-CTC",
+            "engine": "IAM CRNN-CTC (beam search)",
             "detected_type": "handwriting",
             "detection_confidence": round(printed["confidence"], 1) if printed else None,
             "device": str(device),
