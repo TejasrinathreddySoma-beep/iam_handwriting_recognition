@@ -44,10 +44,10 @@ def deskew_image(image: Image.Image, max_angle: float = 7.0) -> Image.Image:
 
 
 def split_page_into_lines(image: Image.Image, min_line_height: int = 10) -> list[Image.Image]:
-    """Deskew a page and extract line crops using adaptive ink and row projections.
+    """Deskew a page, find text bands from adaptive row projections, and crop lines.
 
-    Projection valleys split nearby lines; small gaps are closed to avoid splitting
-    ascenders/descenders into separate bands. Each crop is padded and trimmed to ink.
+    The adaptive threshold follows local background contrast, while small row gaps
+    are closed to keep punctuation and ascenders/descenders attached to their line.
     """
     corrected = deskew_image(image)
     arr = to_grayscale_array(corrected)
@@ -57,47 +57,53 @@ def split_page_into_lines(image: Image.Image, min_line_height: int = 10) -> list
     if not ink.any():
         return []
 
-    row_projection = gaussian_filter1d(ink.sum(axis=1).astype(np.float32), sigma=1.6)
-    peak_distance = max(12, int(arr.shape[0] * 0.012))
-    peaks, _ = find_peaks(
-        row_projection,
-        distance=peak_distance,
-        prominence=max(1.0, float(row_projection.max()) * 0.012),
-    )
-    if not len(peaks):
+    projection = gaussian_filter1d(ink.sum(axis=1).astype(np.float32), sigma=1.4)
+    threshold = max(1.0, arr.shape[1] * 0.001)
+    active = projection >= threshold
+    # Bridge tiny gaps within a text line but retain real inter-line whitespace.
+    gap_limit = max(2, min(6, int(arr.shape[0] * 0.004)))
+    active_rows = np.flatnonzero(active)
+    if not len(active_rows):
         return []
 
-    # Find valleys between neighboring line peaks, then retain bands with ink.
-    cuts = []
-    for left, right in zip(peaks[:-1], peaks[1:]):
-        if right - left > 4:
-            cuts.append(int(left + np.argmin(row_projection[left:right + 1])))
-    bounds = [0] + cuts + [arr.shape[0]]
-    bands = []
-    min_ink = max(1.0, arr.shape[1] * 0.001)
-    for top, bottom in zip(bounds[:-1], bounds[1:]):
-        if bottom - top < min_line_height:
-            continue
-        local = row_projection[top:bottom]
-        active = np.flatnonzero(local >= min_ink)
-        if len(active) < 2:
-            continue
-        y0, y1 = top + int(active[0]), top + int(active[-1]) + 1
-        bands.append((y0, y1))
+    groups = []
+    first = previous = int(active_rows[0])
+    for row in active_rows[1:]:
+        row = int(row)
+        if row - previous > gap_limit + 1:
+            if previous - first + 1 >= min_line_height:
+                groups.append((first, previous + 1))
+            first = row
+        previous = row
+    if previous - first + 1 >= min_line_height:
+        groups.append((first, previous + 1))
 
-    # Merge fragments separated by tiny gaps (e.g. punctuation or broken strokes).
-    merged = []
-    merge_gap = max(3, int(arr.shape[0] * 0.003))
-    for band in bands:
-        if merged and band[0] - merged[-1][1] <= merge_gap:
-            merged[-1] = (merged[-1][0], band[1])
-        else:
-            merged.append(band)
+    # If ink bands merge, split at clear projection valleys between line peaks.
+    if len(groups) <= 1:
+        peaks, _ = find_peaks(
+            projection,
+            distance=max(16, int(arr.shape[0] * 0.05)),
+            prominence=max(2.0, float(projection.max()) * 0.025),
+        )
+        if len(peaks) >= 2:
+            cuts = [
+                int(left + np.argmin(projection[left:right + 1]))
+                for left, right in zip(peaks[:-1], peaks[1:])
+                if right - left >= 12
+            ]
+            candidate = []
+            bounds = [0] + cuts + [arr.shape[0]]
+            for top, bottom in zip(bounds[:-1], bounds[1:]):
+                rows = np.flatnonzero(projection[top:bottom] >= threshold)
+                if len(rows) and bottom - top >= min_line_height:
+                    candidate.append((top + int(rows[0]), top + int(rows[-1]) + 1))
+            if len(candidate) > len(groups):
+                groups = candidate
 
     crops = []
     pad_y = max(3, int(arr.shape[0] * 0.004))
     pad_x = max(4, int(arr.shape[1] * 0.004))
-    for y0, y1 in merged:
+    for y0, y1 in groups:
         region = ink[y0:y1]
         cols = np.flatnonzero(region.any(axis=0))
         if not len(cols):
