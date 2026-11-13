@@ -106,3 +106,25 @@ def test_ctc_minimum_lengths_include_repeated_adjacent_labels():
     targets = torch.tensor([CHAR_TO_ID["l"], CHAR_TO_ID["l"], CHAR_TO_ID["a"], CHAR_TO_ID["b"], CHAR_TO_ID["b"]])
     lengths = torch.tensor([2, 3])
     assert ctc_minimum_lengths(targets, lengths).tolist() == [3, 4]
+
+
+def test_notebook_line_removal_keeps_page_readable():
+    from iam_image import remove_notebook_lines
+    page = Image.new("L", (500, 220), "white")
+    draw = ImageDraw.Draw(page)
+    for y in range(30, 210, 30):
+        draw.line((0, y, 499, y), fill=190, width=1)
+    draw.text((30, 55), "handwritten words", fill=20)
+    cleaned = remove_notebook_lines(page)
+    assert cleaned.size == page.size
+    assert np.asarray(cleaned).mean() > 150
+
+
+def test_page_rectification_returns_image():
+    from iam_image import rectify_page
+    page = Image.new("L", (320, 240), "white")
+    draw = ImageDraw.Draw(page)
+    draw.rectangle((25, 20, 295, 220), outline=30, width=3)
+    result = rectify_page(page)
+    assert isinstance(result, Image.Image)
+    assert result.width > 0 and result.height > 0
