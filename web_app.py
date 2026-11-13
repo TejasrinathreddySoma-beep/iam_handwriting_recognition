@@ -189,6 +189,7 @@ async def recognize(file: UploadFile = File(...)):
         # A wide, shallow image is most likely already a cropped text line.
         # Do not run page segmentation on it: projection-based segmentation can
         # split cursive strokes into multiple fragments and destroy word shapes.
+        image = rectify_page(image)
         width, height = image.size
         is_single_line = width >= 3 * height and height <= 350
         if is_single_line:
@@ -319,24 +320,24 @@ def recognize_handwriting_image(image: Image.Image):
         if not crops:
             crops = [deskew_image(image)]
     results = [predict_line_details(model, crop, device=device, decoder="beam", beam_width=15) for crop in crops]
-    return "\\n".join(item.get("text", "") for item in results), "IAM CRNN-CTC"
+    return "\n".join(item.get("text", "") for item in results), "IAM CRNN-CTC"
 
 
 def recognize_uploaded_image(image: Image.Image):
     image = auto_orient_image(image)
     printed = try_printed_ocr(image)
     if printed and printed["word_count"] >= 2 and printed["confidence"] >= 55:
-        return "\\n".join(printed["lines"]), "Tesseract OCR"
+        return "\n".join(printed["lines"]), "Tesseract OCR"
     try:
         text, engine = recognize_handwriting_image(image)
         if text.strip():
             return text, engine
     except FileNotFoundError:
         if printed and printed["lines"]:
-            return "\\n".join(printed["lines"]), "Tesseract OCR (low-confidence fallback)"
+            return "\n".join(printed["lines"]), "Tesseract OCR (low-confidence fallback)"
         raise
     if printed and printed["lines"]:
-        return "\\n".join(printed["lines"]), "Tesseract OCR (low-confidence fallback)"
+        return "\n".join(printed["lines"]), "Tesseract OCR (low-confidence fallback)"
     return "", "No text detected"
 
 
@@ -366,7 +367,7 @@ async def upload_and_process(file: UploadFile = File(...)):
         elif extension == ".pdf":
             reader = PdfReader(str(temp_path))
             pages_text = [(page.extract_text() or "").strip() for page in reader.pages]
-            extracted = "\\n\\n".join(text for text in pages_text if text).strip()
+            extracted = "\n\n".join(text for text in pages_text if text).strip()
             if extracted:
                 engine = "PDF text extraction"
             else:
@@ -381,7 +382,7 @@ async def upload_and_process(file: UploadFile = File(...)):
                     if page_text.strip():
                         page_results.append(page_text)
                     engine = page_engine if len(pdf) == 1 else "OCR on scanned PDF"
-                extracted = "\\n\\n".join(page_results).strip()
+                extracted = "\n\n".join(page_results).strip()
                 if not extracted:
                     raise ValueError("No text was recognized in this scanned PDF.")
         elif extension == ".docx":
