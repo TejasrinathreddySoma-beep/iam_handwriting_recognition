@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 from iam_decoder import CharacterNGramLM, greedy_decode_with_confidence, prefix_beam_search
 from iam_image import deskew_image, estimate_skew_angle, split_page_into_lines
 from iam_model import BLANK_ID, CHAR_TO_ID, IAMCRNN
-from predict_iam import preprocess_line
+from predict_iam import preprocess_line, predict_line_details
 from train_iam import read_annotations, read_split
 
 
@@ -71,3 +71,31 @@ def test_greedy_and_beam_decoder_return_text_and_score():
 def test_bigram_language_model():
     lm = CharacterNGramLM("hello handwriting")
     assert np.isfinite(lm.log_probability("h", "e"))
+
+
+
+def test_inference_returns_transcription_and_confidence():
+    class DummyRecognizer(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.anchor = torch.nn.Parameter(torch.zeros(1))
+
+        def forward(self, batch):
+            steps = batch.shape[-1] // 4
+            logits = torch.full((1, steps, len(CHAR_TO_ID) + 1), -8.0, device=batch.device)
+            logits[:, :, BLANK_ID] = 0.0
+            logits[0, 0, CHAR_TO_ID["A"]] = 8.0
+            logits[0, 2, CHAR_TO_ID["B"]] = 8.0
+            return logits.log_softmax(dim=-1)
+
+    image = Image.new("L", (80, 32), "white")
+    result = predict_line_details(DummyRecognizer(), image, decoder="greedy")
+    assert result["text"] == "AB"
+    assert 0.0 <= result["confidence"] <= 1.0
+    assert "uncalibrated" in result["confidence_kind"]
+
+
+def test_beam_search_rejects_invalid_width():
+    logits = torch.zeros((3, len(CHAR_TO_ID) + 1)).log_softmax(dim=-1)
+    with pytest.raises(ValueError):
+        prefix_beam_search(logits, 3, beam_width=0)
