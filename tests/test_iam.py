@@ -1,0 +1,73 @@
+from pathlib import Path
+
+import numpy as np
+import pytest
+import torch
+from PIL import Image, ImageDraw
+
+from iam_decoder import CharacterNGramLM, greedy_decode_with_confidence, prefix_beam_search
+from iam_image import deskew_image, estimate_skew_angle, split_page_into_lines
+from iam_model import BLANK_ID, CHAR_TO_ID, IAMCRNN
+from predict_iam import preprocess_line
+from train_iam import read_annotations, read_split
+
+
+def test_read_annotations_and_split(tmp_path):
+    (tmp_path / "lines.txt").write_text(
+        "# comment\n"
+        "a01-000u-00-00 ok 154 19 100 20 0 abc Hello world\n"
+        "a01-000u-00-01 err 150 18 90 18 0 def ignored\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "trainset.txt").write_text("# split\na01-000u-00-00\n", encoding="utf-8")
+    assert read_annotations(tmp_path) == {"a01-000u-00-00": "Hello world"}
+    assert read_split(tmp_path, "trainset") == ["a01-000u-00-00"]
+
+
+def test_preprocess_line_shape_and_range():
+    image = Image.new("RGB", (120, 30), "white")
+    ImageDraw.Draw(image).text((8, 5), "Test", fill="black")
+    tensor = preprocess_line(image)
+    assert tensor.shape[0] == 1
+    assert tensor.dtype == torch.float32
+    assert 0.0 <= float(tensor.min()) <= float(tensor.max()) <= 1.0
+
+
+def test_ctc_output_lengths():
+    widths = torch.tensor([4, 5, 63, 64, 65])
+    assert IAMCRNN.output_lengths(widths).tolist() == [1, 1, 15, 16, 16]
+
+
+def test_deskew_and_line_segmentation():
+    page = Image.new("L", (420, 180), "white")
+    draw = ImageDraw.Draw(page)
+    draw.text((20, 25), "First handwritten line", fill="black")
+    draw.text((20, 85), "Second handwritten line", fill="black")
+    angle = estimate_skew_angle(page)
+    corrected = deskew_image(page)
+    assert -7.0 <= angle <= 7.0
+    assert corrected.width >= page.width
+    lines = split_page_into_lines(page)
+    assert len(lines) >= 1
+
+
+def test_greedy_and_beam_decoder_return_text_and_score():
+    probs = torch.full((5, len(CHAR_TO_ID) + 1), -8.0)
+    probs[:, BLANK_ID] = -3.0
+    probs[0, CHAR_TO_ID["H"]] = -0.01
+    probs[1, CHAR_TO_ID["H"]] = -0.01
+    probs[2, BLANK_ID] = -0.01
+    probs[3, CHAR_TO_ID["i"]] = -0.01
+    probs[4, BLANK_ID] = -0.01
+    probs = probs.log_softmax(dim=-1)
+    greedy, confidence = greedy_decode_with_confidence(probs, 5)
+    beam, score = prefix_beam_search(probs, 5, beam_width=5)
+    assert greedy == "Hi"
+    assert beam == "Hi"
+    assert 0.0 <= confidence <= 1.0
+    assert score > 0.0
+
+
+def test_bigram_language_model():
+    lm = CharacterNGramLM("hello handwriting")
+    assert np.isfinite(lm.log_probability("h", "e"))
