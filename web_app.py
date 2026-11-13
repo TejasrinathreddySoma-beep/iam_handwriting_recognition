@@ -1,4 +1,4 @@
-"""FastAPI backend for handwritten and printed document OCR."""
+"""Automatic OCR API: Tesseract for print, IAM CRNN fallback for handwriting."""
 from functools import lru_cache
 import io
 import os
@@ -6,21 +6,17 @@ from pathlib import Path
 
 import pytesseract
 import torch
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
-from pytesseract import TesseractNotFoundError
+from pytesseract import Output, TesseractNotFoundError
 
-from iam_decoder import CharacterNGramLM
 from iam_image import split_page_into_lines, deskew_image
 from predict_iam import DEFAULT_MODEL_PATH, get_inference_device, load_model, predict_line_details
 
 ROOT = Path(__file__).resolve().parent
 STATIC_DIR = ROOT / "static"
-LANGUAGE_MODEL_PATH = ROOT / "language_model.txt"
-
-# Set TESSERACT_CMD if Tesseract is installed outside the default Windows path.
 _tesseract_override = os.environ.get("TESSERACT_CMD")
 if _tesseract_override:
     pytesseract.pytesseract.tesseract_cmd = _tesseract_override
@@ -29,7 +25,7 @@ elif os.name == "nt":
     if default_tesseract.is_file():
         pytesseract.pytesseract.tesseract_cmd = str(default_tesseract)
 
-app = FastAPI(title="Handwriting and Printed Text OCR")
+app = FastAPI(title="Automatic Handwriting and Printed OCR")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
@@ -42,21 +38,39 @@ def get_model_and_device():
     return load_model(model_path, device), device
 
 
-@lru_cache(maxsize=1)
-def get_language_model():
-    if LANGUAGE_MODEL_PATH.is_file():
-        return CharacterNGramLM.from_file(LANGUAGE_MODEL_PATH)
-    return None
+def try_printed_ocr(image: Image.Image):
+    """Return Tesseract text and a simple confidence estimate, or None if unavailable."""
+    try:
+        prepared = ImageOps.autocontrast(image.convert("L"))
+        data = pytesseract.image_to_data(
+            prepared, lang="eng", config="--oem 3 --psm 3",
+            output_type=Output.DICT,
+        )
+    except (TesseractNotFoundError, OSError):
+        return None
 
+    words, confidences = [], []
+    for word, raw_conf in zip(data.get("text", []), data.get("conf", [])):
+        word = word.strip()
+        try:
+            confidence = float(raw_conf)
+        except (TypeError, ValueError):
+            continue
+        if word and confidence >= 0:
+            words.append(word)
+            confidences.append(confidence)
 
-def recognize_printed(image: Image.Image, mode: str) -> list[str]:
-    """Recognize printed English text with Tesseract; IAM weights are not needed."""
-    prepared = ImageOps.autocontrast(image.convert("L"))
-    page_segmentation = "3" if mode == "page" else "7"
-    text = pytesseract.image_to_string(
-        prepared, lang="eng", config=f"--oem 3 --psm {page_segmentation}"
+    if not words:
+        return {"lines": [], "confidence": 0.0, "word_count": 0}
+
+    # Average confidence plus a minimum word count helps avoid treating random
+    # character-like detections on handwriting as reliable printed OCR.
+    score = sum(confidences) / len(confidences)
+    raw_text = pytesseract.image_to_string(
+        prepared, lang="eng", config="--oem 3 --psm 3"
     )
-    return [line.strip() for line in text.splitlines() if line.strip()]
+    lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+    return {"lines": lines, "confidence": score, "word_count": len(words)}
 
 
 @app.get("/")
@@ -67,121 +81,80 @@ def home():
 @app.get("/api/status")
 def status():
     try:
-        _, device = get_model_and_device()
-        iam_ready = True
-        device_name = (
-            torch.cuda.get_device_name(device)
-            if device.type == "cuda" else str(device).upper()
-        )
-        iam_error = None
-    except Exception as exc:
-        iam_ready, device_name, iam_error = False, "Unavailable", str(exc)
-
-    try:
         pytesseract.get_tesseract_version()
         printed_ready, printed_error = True, None
     except (TesseractNotFoundError, OSError) as exc:
         printed_ready, printed_error = False, str(exc)
 
+    model_path = ROOT / DEFAULT_MODEL_PATH
     return {
-        "ready": iam_ready,
-        "iam_ready": iam_ready,
-        "iam_error": iam_error,
-        "model": "iam_crnn_ctc.pth",
-        "device": device_name,
-        "language_model": LANGUAGE_MODEL_PATH.is_file(),
         "printed_ready": printed_ready,
         "printed_error": printed_error,
-        "printed_engine": "Tesseract OCR",
+        "iam_checkpoint_ready": model_path.is_file(),
+        "device": "CPU" if not torch.cuda.is_available() else torch.cuda.get_device_name(0),
     }
 
 
 @app.post("/api/recognize")
-async def recognize(
-    file: UploadFile = File(...),
-    text_type: str = Form("handwriting"),
-    mode: str = Form("page"),
-    decoder: str = Form("greedy"),
-    beam_width: int = Form(10),
-    use_language_model: bool = Form(False),
-):
+async def recognize(file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Please upload an image file.")
-    if text_type not in {"handwriting", "printed"}:
-        raise HTTPException(status_code=400, detail="text_type must be 'handwriting' or 'printed'.")
-    if mode not in {"line", "page"}:
-        raise HTTPException(status_code=400, detail="mode must be 'line' or 'page'.")
-    if decoder not in {"greedy", "beam"}:
-        raise HTTPException(status_code=400, detail="decoder must be 'greedy' or 'beam'.")
-    if beam_width < 1 or beam_width > 100:
-        raise HTTPException(status_code=400, detail="beam_width must be between 1 and 100.")
-
     try:
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert("L")
     except Exception:
         raise HTTPException(status_code=400, detail="The uploaded file is not a readable image.")
 
-    # Printed mode does not load the IAM model and works without its checkpoint.
-    if text_type == "printed":
-        try:
-            lines = recognize_printed(image, mode)
-        except TesseractNotFoundError:
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "Tesseract OCR was not found. Install the Tesseract Windows "
-                    "application, or set TESSERACT_CMD to the full path of tesseract.exe."
-                ),
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Printed OCR failed: {exc}")
+    # First attempt machine-print OCR. Only accept it when the word-level
+    # confidence is reasonably strong; otherwise fall back to the IAM model.
+    printed = try_printed_ocr(image)
+    if printed and printed["word_count"] >= 2 and printed["confidence"] >= 55:
         return {
-            "lines": [
-                {"number": i + 1, "text": line, "confidence": None, "decoder": "tesseract"}
-                for i, line in enumerate(lines)
-            ],
-            "count": len(lines),
+            "lines": [{"number": i + 1, "text": line, "confidence": None}
+                      for i, line in enumerate(printed["lines"])],
+            "count": len(printed["lines"]),
+            "engine": "Tesseract OCR",
+            "detected_type": "printed",
+            "detection_confidence": round(printed["confidence"], 1),
             "device": "CPU",
-            "model": "Tesseract OCR",
-            "text_type": "printed",
-            "message": None if lines else "No printed text detected. Try a clearer image.",
         }
 
     try:
         model, device = get_model_and_device()
-        language_model = get_language_model() if use_language_model else None
-        if use_language_model and language_model is None:
-            raise HTTPException(
-                status_code=400,
-                detail="Optional language model requested, but language_model.txt is not installed.",
-            )
-        crops = [deskew_image(image)] if mode == "line" else split_page_into_lines(image)
-        if not crops:
+    except FileNotFoundError as exc:
+        if printed and printed["lines"]:
+            # Return low-confidence Tesseract output rather than hiding a
+            # possible partial result when the IAM checkpoint is unavailable.
             return {
-                "lines": [], "count": 0, "device": str(device),
-                "message": "No text lines detected. Try single-line mode or a clearer image.",
+                "lines": [{"number": i + 1, "text": line, "confidence": None}
+                          for i, line in enumerate(printed["lines"])],
+                "count": len(printed["lines"]),
+                "engine": "Tesseract OCR (low-confidence fallback)",
+                "detected_type": "uncertain",
+                "detection_confidence": round(printed["confidence"], 1),
+                "warning": "IAM checkpoint is missing, so handwriting fallback was unavailable.",
+                "device": "CPU",
             }
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc}. Printed OCR was not confident enough to read this image as print.",
+        )
+
+    try:
+        crops = split_page_into_lines(image)
+        if not crops:
+            crops = [deskew_image(image)]
         results = [
-            predict_line_details(
-                model, crop, device=device, decoder=decoder, beam_width=beam_width,
-                language_model=language_model,
-                lm_weight=0.25 if language_model else 0.0,
-            )
+            predict_line_details(model, crop, device=device, decoder="greedy")
             for crop in crops
         ]
         return {
             "lines": [{"number": i + 1, **result} for i, result in enumerate(results)],
             "count": len(results),
+            "engine": "IAM CRNN-CTC",
+            "detected_type": "handwriting",
+            "detection_confidence": round(printed["confidence"], 1) if printed else None,
             "device": str(device),
-            "model": "iam_crnn_ctc.pth",
-            "decoder": decoder,
-            "language_model": language_model is not None,
-            "text_type": "handwriting",
         }
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
-    except HTTPException:
-        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Recognition failed: {exc}")
