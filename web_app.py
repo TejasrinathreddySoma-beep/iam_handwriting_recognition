@@ -235,6 +235,121 @@ def document_row(row):
     }
 
 
+
+def save_to_library(filename: str, extension: str, contents: bytes, extracted: str):
+    doc_id = uuid.uuid4().hex
+    stored_name = doc_id + extension
+    stored_path = DOCUMENT_DIR / stored_name
+    stored_path.write_bytes(contents)
+    uploaded_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    try:
+        with sqlite3.connect(DB_PATH) as db:
+            db.execute(
+                "INSERT INTO documents (id, filename, stored_name, extension, size_bytes, extracted_text, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (doc_id, filename, stored_name, extension, len(contents), extracted, uploaded_at),
+            )
+    except Exception:
+        stored_path.unlink(missing_ok=True)
+        raise
+    return doc_id
+
+
+def recognize_handwriting_image(image: Image.Image):
+    model, device = get_model_and_device()
+    width, height = image.size
+    if width >= 3 * height and height <= 350:
+        crops = [image]
+    else:
+        crops = split_page_into_lines(image)
+        if not crops:
+            crops = [deskew_image(image)]
+    results = [predict_line_details(model, crop, device=device, decoder="greedy") for crop in crops]
+    return "\\n".join(item.get("text", "") for item in results), "IAM CRNN-CTC"
+
+
+def recognize_uploaded_image(image: Image.Image):
+    printed = try_printed_ocr(image)
+    if printed and printed["word_count"] >= 2 and printed["confidence"] >= 55:
+        return "\\n".join(printed["lines"]), "Tesseract OCR"
+    try:
+        text, engine = recognize_handwriting_image(image)
+        if text.strip():
+            return text, engine
+    except FileNotFoundError:
+        if printed and printed["lines"]:
+            return "\\n".join(printed["lines"]), "Tesseract OCR (low-confidence fallback)"
+        raise
+    if printed and printed["lines"]:
+        return "\\n".join(printed["lines"]), "Tesseract OCR (low-confidence fallback)"
+    return "", "No text detected"
+
+
+@app.post("/api/upload")
+async def upload_and_process(file: UploadFile = File(...)):
+    """One upload endpoint: process file, save original and extracted text."""
+    filename = Path(file.filename or "upload").name
+    extension = Path(filename).suffix.lower()
+    image_extensions = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
+    supported = image_extensions | {".pdf", ".docx", ".txt", ".md"}
+    if extension not in supported:
+        raise HTTPException(status_code=400, detail="Supported formats: images, PDF, DOCX, TXT, and MD.")
+    contents = await file.read(MAX_DOCUMENT_BYTES + 1)
+    if len(contents) > MAX_DOCUMENT_BYTES:
+        raise HTTPException(status_code=413, detail="Maximum upload size is 25 MB.")
+    if not contents:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty.")
+
+    temp_path = DOCUMENT_DIR / (uuid.uuid4().hex + extension)
+    extracted = ""
+    engine = "Text extraction"
+    try:
+        temp_path.write_bytes(contents)
+        if extension in image_extensions:
+            image = Image.open(io.BytesIO(contents)).convert("L")
+            extracted, engine = recognize_uploaded_image(image)
+        elif extension == ".pdf":
+            reader = PdfReader(str(temp_path))
+            pages_text = [(page.extract_text() or "").strip() for page in reader.pages]
+            extracted = "\\n\\n".join(text for text in pages_text if text).strip()
+            if extracted:
+                engine = "PDF text extraction"
+            else:
+                # Image-only/scanned PDF: render pages and pass each through OCR.
+                import fitz
+                pdf = fitz.open(stream=contents, filetype="pdf")
+                page_results = []
+                for page in pdf:
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+                    page_image = Image.open(io.BytesIO(pix.tobytes("png"))).convert("L")
+                    page_text, page_engine = recognize_uploaded_image(page_image)
+                    if page_text.strip():
+                        page_results.append(page_text)
+                    engine = page_engine if len(pdf) == 1 else "OCR on scanned PDF"
+                extracted = "\\n\\n".join(page_results).strip()
+                if not extracted:
+                    raise ValueError("No text was recognized in this scanned PDF.")
+        elif extension == ".docx":
+            extracted = extract_document_text(temp_path, extension)
+            engine = "Word text extraction"
+        else:
+            extracted = contents.decode("utf-8", errors="replace").strip()
+            engine = "Text file"
+        if not extracted:
+            raise ValueError("No text was found in this file.")
+        doc_id = save_to_library(filename, extension, contents, extracted)
+        return {
+            "id": doc_id, "filename": filename, "characters": len(extracted),
+            "text": extracted, "engine": engine,
+            "message": "Processed and saved to your document library."
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Could not process {filename}: {exc}")
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
 @app.post("/api/documents")
 async def add_document(file: UploadFile = File(...)):
     filename = Path(file.filename or "document").name
