@@ -82,3 +82,8 @@ Export links are shown beside each item in the document library and in the recog
 ### Camera-photo OCR preprocessing
 
 Image uploads now attempt automatic page orientation correction before OCR. The pipeline uses Tesseract orientation detection when available and compares 0°/180° printed-text evidence as a fallback. This helps with upside-down phone photos, but it does not guarantee accurate handwriting recognition. Perspective correction, page-boundary detection, and handwriting model accuracy remain dependent on image quality and the IAM model's training domain.
+
+
+### Handwriting OCR improvements (no retraining)
+
+The current page OCR pipeline applies automatic orientation correction, attempts page perspective rectification when a clear four-corner page boundary is visible, suppresses long horizontal notebook rules before line segmentation, and uses CTC prefix beam search (beam width 15) for IAM line decoding. These are inference-time changes and reuse the existing checkpoint. They can improve phone photos of ruled pages, but cannot guarantee recovery of strokes hidden by rules, blur, severe shadows, or handwriting styles unlike the IAM training set. The application also returns real line breaks between recognized lines.
