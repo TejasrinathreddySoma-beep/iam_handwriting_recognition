@@ -43,7 +43,7 @@ def deskew_image(image: Image.Image, max_angle: float = 7.0) -> Image.Image:
     return Image.fromarray(np.clip(corrected, 0, 255).astype(np.uint8))
 
 
-def split_page_into_lines(image: Image.Image, min_line_height: int = 10) -> list[Image.Image]:
+def split_page_into_lines(image: Image.Image, min_line_height: int = 6) -> list[Image.Image]:
     """Deskew a page, find text bands from adaptive row projections, and crop lines.
 
     The adaptive threshold follows local background contrast, while small row gaps
