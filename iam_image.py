@@ -19,7 +19,7 @@ def to_grayscale_array(image: Image.Image) -> np.ndarray:
 def estimate_skew_angle(image: Image.Image, max_angle: float = 7.0) -> float:
     """Estimate small page skew by maximizing horizontal projection variance."""
     arr = to_grayscale_array(image)
-    if arr.shape[1] < arr.shape[0] or arr.size == 0:
+    if arr.size == 0:
         return 0.0
     background = gaussian_filter(arr.astype(np.float32), sigma=max(5, min(arr.shape) / 40))
     ink = np.clip(background - arr.astype(np.float32) - 8, 0, 255)
