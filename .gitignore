@@ -1,10 +1,17 @@
-# IAM dataset and generated artifacts (obtain dataset separately)
-data/
-*.pth
-*.pt
-*.ckpt
+
+# Python
 __pycache__/
 *.py[cod]
 .venv/
-venv/
-.env
+
+# IDE
+.idea/
+
+# Dataset
+data/
+
+# Generated model weights
+mnist_cnn.pth
+
+# Trained IAM model checkpoint (download/copy locally; do not commit)
+iam_crnn_ctc.pth
