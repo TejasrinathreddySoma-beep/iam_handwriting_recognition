@@ -2,16 +2,19 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import sys
 import zipfile
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 import torch
 
 from iam_model import CHAR_TO_ID
 from predict_iam import IMAGE_HEIGHT
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def package_checkpoint(checkpoint_path: Path, version: str, output_dir: Path) -> Path:
@@ -28,8 +31,10 @@ def package_checkpoint(checkpoint_path: Path, version: str, output_dir: Path) ->
         raise ValueError("Checkpoint is missing model_state_dict.")
     output_dir.mkdir(parents=True, exist_ok=True)
     archive = output_dir / f"iam-crnn-ctc-{version}.zip"
+    checkpoint_sha256 = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
     manifest = {
         "version": version,
+        "checkpoint_sha256": checkpoint_sha256,
         "architecture": "CNN-BiLSTM-CTC",
         "image_height": IMAGE_HEIGHT,
         "num_characters": len(CHAR_TO_ID),
