@@ -2,9 +2,64 @@
 from __future__ import annotations
 
 import numpy as np
+import cv2
 from PIL import Image, ImageOps
 from scipy.ndimage import gaussian_filter, gaussian_filter1d, rotate
 from scipy.signal import find_peaks
+
+
+
+def rectify_page(image: Image.Image) -> Image.Image:
+    """Perspective-correct a photographed page when a clear page quadrilateral exists."""
+    gray = np.asarray(image.convert("L"))
+    height, width = gray.shape
+    edges = cv2.Canny(cv2.GaussianBlur(gray, (5, 5), 0), 35, 110)
+    contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    candidates = []
+    for contour in sorted(contours, key=cv2.contourArea, reverse=True)[:30]:
+        perimeter = cv2.arcLength(contour, True)
+        polygon = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
+        area = cv2.contourArea(polygon)
+        if len(polygon) == 4 and area >= height * width * 0.22 and cv2.isContourConvex(polygon):
+            candidates.append((area, polygon.reshape(4, 2)))
+    if not candidates:
+        return image.convert("L")
+    points = candidates[0][1].astype("float32")
+    sums = points.sum(axis=1)
+    diffs = np.diff(points, axis=1).ravel()
+    ordered = np.array([
+        points[np.argmin(sums)], points[np.argmin(diffs)],
+        points[np.argmax(sums)], points[np.argmax(diffs)]
+    ], dtype="float32")
+    tl, tr, br, bl = ordered
+    out_w = int(max(np.linalg.norm(br - bl), np.linalg.norm(tr - tl)))
+    out_h = int(max(np.linalg.norm(tr - br), np.linalg.norm(tl - bl)))
+    if out_w < width * 0.35 or out_h < height * 0.35 or out_w < 100 or out_h < 100:
+        return image.convert("L")
+    destination = np.array([[0, 0], [out_w - 1, 0], [out_w - 1, out_h - 1], [0, out_h - 1]], dtype="float32")
+    matrix = cv2.getPerspectiveTransform(ordered, destination)
+    warped = cv2.warpPerspective(gray, matrix, (out_w, out_h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_CONSTANT, borderValue=255)
+    return Image.fromarray(warped)
+
+
+def remove_notebook_lines(image: Image.Image) -> Image.Image:
+    """Suppress long horizontal paper rules while trying to preserve ink crossings."""
+    gray = np.asarray(image.convert("L"))
+    height, width = gray.shape
+    if width < 80 or height < 40:
+        return image.convert("L")
+    block = max(31, min(61, (min(height, width) // 2) * 2 + 1))
+    binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                  cv2.THRESH_BINARY_INV, block, 12)
+    kernel_width = max(25, width // 28)
+    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_width, 1))
+    line_mask = cv2.morphologyEx(binary, cv2.MORPH_OPEN, horizontal_kernel)
+    # Ignore short horizontal strokes; only remove lines spanning much of the page.
+    if cv2.countNonZero(line_mask) < width * 0.12:
+        return image.convert("L")
+    line_mask = cv2.dilate(line_mask, np.ones((2, 2), np.uint8), iterations=1)
+    cleaned = cv2.inpaint(gray, line_mask, 2, cv2.INPAINT_TELEA)
+    return Image.fromarray(cleaned)
 
 
 def to_grayscale_array(image: Image.Image) -> np.ndarray:
@@ -50,6 +105,7 @@ def split_page_into_lines(image: Image.Image, min_line_height: int = 6) -> list[
     are closed to keep punctuation and ascenders/descenders attached to their line.
     """
     corrected = deskew_image(image)
+    corrected = remove_notebook_lines(corrected)
     arr = to_grayscale_array(corrected)
     gray = arr.astype(np.float32)
     background = gaussian_filter(gray, sigma=max(4.0, min(arr.shape) / 35.0))
