@@ -105,3 +105,27 @@ python finetune_iam.py --manifest data/my_handwriting/manifest.csv --checkpoint 
 The script splits by `group` (not by individual line) to reduce train/validation leakage, starts with a low learning rate, freezes the CNN for the first epoch by default, unfreezes it afterwards, clips gradients, and early-stops on validation character error rate (CER). It writes the best validation checkpoint to `iam_crnn_ctc_finetuned.pth`; the original remains untouched. You need at least two distinct groups. For a single writer, group by source page/document; for multiple writers, group by writer ID if the goal is to measure generalization to unseen writers. Aim for several pages per writer and keep a separate untouched test set for final evaluation.
 
 **Important:** this fine-tuned file is not automatically substituted into the running app. First evaluate it on held-out pages. To use it for inference, point the app's configured model/checkpoint path to the new file (or deliberately replace the local checkpoint after making a backup). Do not commit either checkpoint to Git.
+
+
+## Getting a labelled dataset for fine-tuning
+
+For a quick start, export the line-level IAM dataset hosted on Hugging Face:
+
+- Dataset: [Teklia/IAM-line](https://huggingface.co/datasets/Teklia/IAM-line)
+- It contains image/transcription pairs for English handwriting. The repository's original IAM CRNN was already designed around IAM, so this is best used to validate the pipeline or continue training consistently—not as proof of generalization to new handwriting domains.
+- The source IAM database is for non-commercial research use; follow the dataset's original terms and citation requirements. See the [official IAM database page](https://fki.tic.heia-fr.ch/databases/iam-handwriting-database).
+
+Install the optional exporter dependencies and prepare the data locally:
+
+```powershell
+python -m pip install -r requirements-data.txt
+python prepare_hf_iam.py --output data/iam_hf
+```
+
+Then run the fine-tuner:
+
+```powershell
+python finetune_iam.py --manifest data/iam_hf/manifest.csv --checkpoint iam_crnn_ctc.pth --output iam_crnn_ctc_finetuned.pth --device cpu --epochs 12 --batch-size 2
+```
+
+The exporter writes line images and transcriptions only under `data/`, which is gitignored. If the downloaded dataset does not include writer IDs, the fine-tuner can only make a sample-level validation split; it cannot promise that the same writer is absent from both sets. For a stronger multi-writer test, use a dataset with writer metadata such as the [CVL database](https://cvl.tuwien.ac.at/research/cvl-databases/an-off-line-database-for-writer-retrieval-writer-identification-and-word-spotting/), and prepare its word/line crops and transcriptions with writer IDs. CVL is non-commercial research use only. No public dataset can guarantee recognition of every handwriting style; evaluate on held-out writers and on real phone photos.
