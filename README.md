@@ -1,66 +1,25 @@
-# IAM Handwriting + Printed Document OCR
+# Automatic Handwriting + Printed Document OCR
 
-One local web app with two selectable OCR engines:
+Upload an image and the application automatically attempts printed OCR first, then falls back to the existing IAM handwriting recognizer when printed OCR confidence is low. No engine, page/line, or decoder selection is required in the UI.
 
-- **Handwritten English:** your existing IAM CRNN (CNN + BiLSTM + CTC) checkpoint.
-- **Printed English:** Tesseract OCR, which runs on CPU and does not require the IAM checkpoint.
+- **Printed English:** Tesseract OCR (CPU; no IAM checkpoint needed when its result is confident).
+- **Handwritten English:** existing IAM CRNN (CNN + BiLSTM + CTC) checkpoint (CPU inference supported; no retraining).
 
-The engines are selected explicitly. This prevents printed serif-font pages from being sent to a model trained on handwriting. This version does not yet automatically separate handwriting and print regions when both appear on the same page; process such content in separate crops with the matching engine.
+## Windows setup
 
-## Existing IAM model results
-
-| Metric | Recorded result |
-|---|---:|
-| Epochs completed | 30 |
-| Best validation CER | **6.74%** (epoch 25) |
-| Held-out test CER | **7.79%** |
-| Test loss | **0.4188** |
-
-These are historical metrics from the supplied training run, not a fresh evaluation.
-
-## Windows installation
-
-Clone the repository and create a virtual environment:
-
-```powershell
-git clone https://github.com/TejasrinathreddySoma-beep/iam_handwriting_recognition.git
-cd iam_handwriting_recognition
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-```
-
-Install PyTorch using the [official PyTorch selector](https://pytorch.org/get-started/locally/). CPU-only PyTorch is sufficient for inference. Then install the project packages:
+Install Python dependencies (install PyTorch separately from the [official selector](https://pytorch.org/get-started/locally/); CPU is sufficient):
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-### Install Tesseract for printed text
-
-Install the Windows Tesseract application from the [UB Mannheim Windows builds](https://github.com/UB-Mannheim/tesseract/wiki). The app checks this default path:
-
-```text
-C:\Program Files\Tesseract-OCR\tesseract.exe
-```
-
-For a custom install location, set this environment variable before starting the server:
+Install the Tesseract Windows application and English language data from the [UB Mannheim builds](https://github.com/UB-Mannheim/tesseract/wiki). The default path is `C:\Program Files\Tesseract-OCR\tesseract.exe`. If installed elsewhere, set:
 
 ```powershell
 $env:TESSERACT_CMD = "D:\path\to\tesseract.exe"
 ```
 
-Note: `pytesseract` is only the Python wrapper. You must install the Tesseract application separately.
-
-### Add your existing IAM checkpoint
-
-Copy your compatible trained checkpoint into the repository root as:
-
-```text
-iam_crnn_ctc.pth
-```
-
-Do not commit the checkpoint to Git. It is a local model asset and is not included in this repository.
+For handwriting, copy your already-trained compatible checkpoint into the repository root as `iam_crnn_ctc.pth`. Do not commit the checkpoint to Git.
 
 ## Run
 
@@ -68,35 +27,25 @@ Do not commit the checkpoint to Git. It is a local model asset and is not includ
 python -m uvicorn web_app:app --host 127.0.0.1 --port 8000
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000), upload an image, and recognition starts automatically. The result can be edited, copied, or downloaded. `/api/status` reports whether Tesseract and the local IAM checkpoint are available.
 
-1. Choose **Whole page** or **Single text line**.
-2. Choose **Handwritten (IAM)** for handwriting. The checkpoint is required.
-3. Choose **Printed (Tesseract)** for machine-printed documents. The IAM checkpoint is not required.
-4. Upload an image, recognize, then edit/copy/download the output.
+## Automatic routing behavior
 
-The `/api/status` endpoint reports IAM checkpoint readiness and Tesseract availability independently.
+The backend first runs Tesseract page OCR and checks word-level confidence. When it finds at least two words and average confidence is at least 55/100, it returns the printed OCR result. Otherwise it uses IAM page-line segmentation and greedy CTC decoding. If the IAM checkpoint is absent and Tesseract has a low-confidence partial result, that partial result is returned with a warning; if neither path can produce output, the API explains what is missing.
+
+This is a practical page-level automatic choice, not a perfect mixed-page segment classifier. A page containing both handwriting and print may need a future region-level hybrid pipeline to route each separate text region to its best recognizer. OCR results should be proofread.
 
 ## API
 
-`POST /api/recognize` accepts multipart fields: `file` (required image), `text_type` (`handwriting` or `printed`), `mode` (`page` or `line`), `decoder` (`greedy` or `beam`), `beam_width` (1–100), and `use_language_model` (boolean). Defaults are handwriting, page, greedy, 10, and false. Decoder/LM settings apply to the IAM path only.
-
-## Important limitations
-
-- The repository does not include `iam_crnn_ctc.pth`; supply your compatible local checkpoint for handwriting inference.
-- Printed OCR uses Tesseract English language data and is affected by scan resolution, contrast, font, and layout.
-- The IAM model recognizes handwritten lines; page mode uses heuristic line segmentation and can struggle with columns, tables, skew, or touching lines.
-- Mixed handwritten/printed pages are not automatically routed by region in this version.
-- OCR can make mistakes. Proofread important output.
-- Adding printed OCR does not alter the IAM architecture or require retraining.
+`POST /api/recognize`: multipart image field `file`. Engine selection and page mode are automatic. `GET /api/status`: engine/checkpoint availability.
 
 ## Main files
 
 - `iam_model.py`: IAM CRNN architecture.
 - `iam_image.py`: preprocessing, deskewing, and line segmentation.
-- `iam_decoder.py`: greedy and prefix-beam CTC decoding.
+- `iam_decoder.py`: CTC decoding utilities.
 - `predict_iam.py`: IAM inference.
-- `train_iam.py`: IAM training.
-- `web_app.py`: FastAPI backend for both OCR engines.
-- `static/index.html`: browser interface.
-- `tests/`: IAM automated tests.
+- `train_iam.py`: IAM training (not needed for inference).
+- `web_app.py`: automatic OCR backend.
+- `static/index.html`: upload-first interface.
+- `tests/`: IAM tests.
