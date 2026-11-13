@@ -63,3 +63,17 @@ The web app also includes a local document library. Add PDF, DOCX, TXT, or Markd
 - This is a local, single-user library without login or cloud sync. Keep backups of your `data/` folder.
 
 Document endpoints: `POST /api/documents`, `GET /api/documents?q=...`, `GET /api/documents/{id}`, and `GET /api/documents/{id}/download`.
+
+
+## Download and export formats
+
+Each saved upload keeps its original file available through the **Original** download link. The extracted or recognized text can also be exported as:
+
+- PDF (`.pdf`)
+- Microsoft Word (`.docx`)
+- Plain text (`.txt`)
+- Markdown (`.md`)
+- HTML (`.html`)
+- Rich Text Format (`.rtf`)
+
+Export links are shown beside each item in the document library and in the recognition result. PDF generation uses ReportLab; Word generation uses python-docx. Install all dependencies with `python -m pip install -r requirements.txt`.
