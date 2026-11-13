@@ -7,7 +7,7 @@ from pathlib import Path
 import pytesseract
 import torch
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
 from pytesseract import Output, TesseractNotFoundError
@@ -176,6 +176,15 @@ from datetime import datetime, timezone
 from fastapi.responses import FileResponse
 from docx import Document as WordDocument
 from pypdf import PdfReader
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.enums import TA_LEFT
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from xml.sax.saxutils import escape as xml_escape
+from urllib.parse import quote
 
 DATA_DIR = ROOT / "data"
 DOCUMENT_DIR = DATA_DIR / "documents"
@@ -410,6 +419,109 @@ def get_document(document_id: str):
     if not row:
         raise HTTPException(status_code=404, detail="Document not found.")
     return {"id": row[0], "filename": row[1], "extension": row[2], "uploaded_at": row[4], "text": row[5]}
+
+
+
+EXPORT_FORMATS = {
+    "txt": ("text/plain; charset=utf-8", "txt"),
+    "md": ("text/markdown; charset=utf-8", "md"),
+    "html": ("text/html; charset=utf-8", "html"),
+    "rtf": ("application/rtf", "rtf"),
+    "docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"),
+    "pdf": ("application/pdf", "pdf"),
+}
+
+
+def make_export_file(text: str, filename: str, export_format: str) -> bytes:
+    """Render recognized/extracted text to a portable download format."""
+    if export_format in {"txt", "md"}:
+        return text.encode("utf-8")
+    if export_format == "html":
+        safe_title = xml_escape(filename)
+        body = "<br>\n".join(xml_escape(line) for line in text.splitlines())
+        return (
+            "<!doctype html><html><head><meta charset='utf-8'>"
+            f"<title>{safe_title}</title></head><body>"
+            f"<h1>{safe_title}</h1><main>{body}</main></body></html>"
+        ).encode("utf-8")
+    if export_format == "rtf":
+        def rtf_escape(value):
+            out = []
+            for char in value:
+                code = ord(char)
+                if char in "\\\\{}":
+                    out.append("\\\\" + char)
+                elif char == "\n":
+                    out.append("\\par\n")
+                elif code < 128:
+                    out.append(char)
+                else:
+                    signed = code if code < 32768 else code - 65536
+                    out.append(f"\\u{signed}?")
+            return "".join(out)
+        return ("{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Arial;}}\\f0\\fs22 "
+                + rtf_escape(text) + "}").encode("ascii", errors="replace")
+    if export_format == "docx":
+        doc = WordDocument()
+        for line in text.splitlines():
+            doc.add_paragraph(line)
+        if not text.splitlines():
+            doc.add_paragraph("")
+        output = io.BytesIO()
+        doc.save(output)
+        return output.getvalue()
+    if export_format == "pdf":
+        output = io.BytesIO()
+        doc = SimpleDocTemplate(
+            output, pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm,
+            topMargin=18 * mm, bottomMargin=18 * mm,
+            title=filename, author="Document OCR",
+        )
+        styles = getSampleStyleSheet()
+        style = styles["BodyText"]
+        style.fontName = "Helvetica"
+        style.fontSize = 10
+        style.leading = 14
+        # Use a Unicode font when available so common accented characters render.
+        font_candidates = [
+            Path(r"C:\\Windows\\Fonts\\arial.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+        ]
+        for font_path in font_candidates:
+            if font_path.is_file():
+                try:
+                    pdfmetrics.registerFont(TTFont("OCRUnicode", str(font_path)))
+                    style.fontName = "OCRUnicode"
+                    break
+                except Exception:
+                    pass
+        story = [Paragraph(xml_escape(filename), getSampleStyleSheet()["Title"]), Spacer(1, 8)]
+        for line in text.splitlines():
+            story.append(Paragraph(xml_escape(line) if line else "&#160;", style))
+        doc.build(story)
+        return output.getvalue()
+    raise ValueError("Unsupported export format.")
+
+
+@app.get("/api/documents/{document_id}/export/{export_format}")
+def export_document(document_id: str, export_format: str):
+    export_format = export_format.lower().lstrip(".")
+    if export_format not in EXPORT_FORMATS:
+        raise HTTPException(status_code=400, detail="Choose TXT, DOCX, PDF, Markdown, HTML, or RTF.")
+    with sqlite3.connect(DB_PATH) as db:
+        row = db.execute(
+            "SELECT filename, extracted_text FROM documents WHERE id = ?",
+            (document_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    original_name, extracted_text = row
+    base_name = Path(original_name).stem or "recognized_text"
+    media_type, extension = EXPORT_FORMATS[export_format]
+    content = make_export_file(extracted_text, base_name, export_format)
+    download_name = f"{base_name}_text.{extension}"
+    headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(download_name)}"}
+    return Response(content=content, media_type=media_type, headers=headers)
 
 
 @app.get("/api/documents/{document_id}/download")
