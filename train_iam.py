@@ -17,7 +17,7 @@ from PIL import Image, ImageOps
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
 
-from iam_model import CHAR_TO_ID, IAMCRNN, greedy_decode
+from iam_model import CHAR_TO_ID, IAMCRNN, ctc_minimum_lengths, greedy_decode
 
 DATA_ROOT = Path("data/iam")
 IMAGE_HEIGHT = 64
@@ -176,14 +176,7 @@ def run_epoch(model, loader, criterion, device, optimizer=None):
         targets = targets.to(device, non_blocking=(device.type == "cuda"))
         target_lengths = target_lengths.to(device, non_blocking=(device.type == "cuda"))
         input_lengths = IAMCRNN.output_lengths(widths).to(device)
-        # CTC needs one extra time step for each pair of adjacent repeated labels.
-        minimum_ctc_lengths = target_lengths.clone()
-        offset = 0
-        for index, target_length in enumerate(target_lengths.tolist()):
-            target = targets[offset:offset + target_length]
-            if target_length > 1:
-                minimum_ctc_lengths[index] += int((target[1:] == target[:-1]).sum().item())
-            offset += target_length
+        minimum_ctc_lengths = ctc_minimum_lengths(targets, target_lengths)
         if torch.any(input_lengths < minimum_ctc_lengths):
             raise RuntimeError(
                 "A line is too wide/long for CTC after resizing (including repeated-label constraints). "
