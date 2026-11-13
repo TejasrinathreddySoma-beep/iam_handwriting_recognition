@@ -50,7 +50,7 @@ def auto_orient_image(image: Image.Image) -> Image.Image:
             return image.rotate(-rotation, expand=True, fillcolor=255)
         if rotation == 0 and confidence >= 1.0:
             return image
-    except (TesseractNotFoundError, OSError, RuntimeError, ValueError, KeyError):
+    except Exception:
         pass
 
     # OSD often struggles with handwriting. Compare both half-turns using
@@ -61,7 +61,7 @@ def auto_orient_image(image: Image.Image) -> Image.Image:
         flipped_score = _printed_orientation_score(upside_down)
         if flipped_score > normal_score * 1.15 and flipped_score >= 8.0:
             return upside_down
-    except (TesseractNotFoundError, OSError, RuntimeError):
+    except Exception:
         pass
     return image
 
