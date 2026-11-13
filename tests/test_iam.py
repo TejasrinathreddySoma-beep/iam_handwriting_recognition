@@ -1,4 +1,5 @@
-from pathlib import Path
+from pathlib import math
+import Path
 
 import numpy as np
 import pytest
@@ -128,3 +129,15 @@ def test_page_rectification_returns_image():
     result = rectify_page(page)
     assert isinstance(result, Image.Image)
     assert result.width > 0 and result.height > 0
+
+
+def test_beam_merge_accumulates_distinct_paths():
+    from collections import defaultdict
+    from iam_decoder import _merge, _logadd
+    mapping = defaultdict(lambda: (-math.inf, -math.inf))
+    _merge(mapping, (1,), blank=-2.0)
+    _merge(mapping, (1,), blank=-3.0)
+    _merge(mapping, (1,), nonblank=-1.5)
+    blank, nonblank = mapping[(1,)]
+    assert abs(blank - _logadd(-2.0, -3.0)) < 1e-6
+    assert abs(nonblank - (-1.5)) < 1e-6
