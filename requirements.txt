@@ -1,3 +1,14 @@
-torch>=2.1
+# Install PyTorch separately using the official installer for your platform and accelerator.
+# For NVIDIA RTX CUDA training, follow the CUDA setup in README.md.
 numpy>=1.24
+matplotlib>=3.7
+scikit-learn>=1.3
 Pillow>=10.0
+streamlit>=1.35
+streamlit-drawable-canvas>=0.9
+scipy>=1.10
+
+# Standalone HTML interface for IAM recognition
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
