@@ -176,8 +176,19 @@ def run_epoch(model, loader, criterion, device, optimizer=None):
         targets = targets.to(device, non_blocking=(device.type == "cuda"))
         target_lengths = target_lengths.to(device, non_blocking=(device.type == "cuda"))
         input_lengths = IAMCRNN.output_lengths(widths).to(device)
-        if torch.any(input_lengths < target_lengths):
-            raise RuntimeError("A line is too wide/long for CTC after resizing. Lower IMAGE_HEIGHT or increase MAX_WIDTH.")
+        # CTC needs one extra time step for each pair of adjacent repeated labels.
+        minimum_ctc_lengths = target_lengths.clone()
+        offset = 0
+        for index, target_length in enumerate(target_lengths.tolist()):
+            target = targets[offset:offset + target_length]
+            if target_length > 1:
+                minimum_ctc_lengths[index] += int((target[1:] == target[:-1]).sum().item())
+            offset += target_length
+        if torch.any(input_lengths < minimum_ctc_lengths):
+            raise RuntimeError(
+                "A line is too wide/long for CTC after resizing (including repeated-label constraints). "
+                "Lower IMAGE_HEIGHT or increase MAX_WIDTH."
+            )
         if training:
             optimizer.zero_grad(set_to_none=True)
         with torch.set_grad_enabled(training):
