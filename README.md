@@ -49,12 +49,21 @@ Training artifacts:
 
 ```text
 iam_handwriting_recognition/
-├── iam_model.py              # CNN + BiLSTM + CTC architecture and decoder
+├── iam_model.py              # CNN + BiLSTM + CTC architecture
+├── iam_image.py               # Deskewing and page-to-line segmentation
+├── iam_decoder.py             # Greedy and prefix-beam CTC decoding
 ├── train_iam.py               # Dataset, training, validation and test evaluation
-├── predict_iam.py              # Single-line inference
-├── web_app.py                 # FastAPI backend and page line segmentation
+├── predict_iam.py             # Single-line inference and confidence
+├── evaluate_decoders.py       # Greedy/beam CER comparison on validation data
+├── web_app.py                 # FastAPI backend
 ├── static/
-│   └── index.html              # Browser upload and results interface
+│   └── index.html             # Browser upload, decoder controls and confidence
+├── scripts/
+│   └── package_checkpoint.py  # Versioned model-release packaging
+├── tests/
+│   └── test_iam.py            # Automated unit and inference tests
+├── .github/workflows/
+│   └── tests.yml              # CI test workflow
 ├── reports/
 │   ├── iam_cer_curve.png
 │   ├── iam_loss_curve.png
@@ -146,7 +155,7 @@ The script selects the best checkpoint by validation CER and writes `iam_crnn_ct
 python train_iam.py --resume --device auto --epochs 30
 ```
 
-The default batch size is 4 and the default data-loader worker count is 0 for a safe Windows setup. Training time depends on the dataset, GPU, and batch size.
+The default batch size is 4 and the default data-loader worker count is 0 for a safe Windows setup. Training time depends on the dataset, GPU, and batch size. The trainer now checks CTC's repeated-label alignment requirement as well as the target length.
 
 ### 6. Predict one cropped line
 
@@ -181,7 +190,7 @@ The checkpoint `iam_crnn_ctc.pth` must be present in the repository root. The `/
 - The checked-in repository does **not** include `iam_crnn_ctc.pth`. The source training branch excluded it from Git. Train the model or copy your own compatible checkpoint into the project root before running inference.
 - Page segmentation is a lightweight heuristic, not a full document-layout engine. Skewed pages, columns, tables, touching lines, or noisy backgrounds may need preprocessing or manual line crops.
 - The model recognizes a single line at a time; it does not reconstruct page structure, paragraphs, or reading order across multiple columns.
-- Greedy CTC decoding is simple and fast, but beam search or a language model may improve difficult text.
+- Greedy decoding remains the fast default. Prefix beam search and optional character bigram rescoring are available; compare their CER on the validation split before selecting a decoder.
 - Results can vary with handwriting style, scan quality, and dataset split. The published metrics above describe the supplied run, not a guarantee for arbitrary documents.
 
 ## Implemented improvements
