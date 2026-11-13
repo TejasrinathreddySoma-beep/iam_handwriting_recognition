@@ -18,6 +18,8 @@ from pathlib import Path
 from datasets import load_dataset
 from PIL import Image
 
+from iam_model import CHARACTERS
+
 
 def safe_name(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", value).strip("._") or "line"
@@ -54,9 +56,7 @@ def main():
                 if not text or image is None:
                     skipped += 1
                     continue
-                unsupported = sorted(set(text) - set(
-                    " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#&'()*+,-./:;?@[]_\\""
-                ))
+                unsupported = sorted(set(text) - set(CHARACTERS))
                 if unsupported:
                     skipped += 1
                     continue
