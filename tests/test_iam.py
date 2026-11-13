@@ -141,3 +141,24 @@ def test_beam_merge_accumulates_distinct_paths():
     blank, nonblank = mapping[(1,)]
     assert abs(blank - _logadd(-2.0, -3.0)) < 1e-6
     assert abs(nonblank - (-1.5)) < 1e-6
+
+
+def test_finetune_manifest_splits_by_group(tmp_path):
+    from finetune_iam import read_manifest, split_by_group
+
+    rows = []
+    for group in ("writer-a", "writer-b", "writer-c", "writer-d", "writer-e"):
+        image_path = tmp_path / f"{group}.png"
+        Image.new("L", (100, 40), "white").save(image_path)
+        rows.append((image_path, "Hello", group))
+    manifest = tmp_path / "manifest.csv"
+    import csv
+    with manifest.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["image", "text", "group"])
+        for image_path, text, group in rows:
+            writer.writerow([image_path.name, text, group])
+    loaded = read_manifest(manifest)
+    train_rows, val_rows = split_by_group(loaded, 0.2, 42)
+    assert train_rows and val_rows
+    assert {r["group"] for r in train_rows}.isdisjoint({r["group"] for r in val_rows})
