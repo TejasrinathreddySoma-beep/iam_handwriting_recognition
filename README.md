@@ -87,3 +87,21 @@ Image uploads now attempt automatic page orientation correction before OCR. The 
 ### Handwriting OCR improvements (no retraining)
 
 The current page OCR pipeline applies automatic orientation correction, attempts page perspective rectification when a clear four-corner page boundary is visible, suppresses long horizontal notebook rules before line segmentation, and uses CTC prefix beam search (beam width 15) for IAM line decoding. These are inference-time changes and reuse the existing checkpoint. They can improve phone photos of ruled pages, but cannot guarantee recovery of strokes hidden by rules, blur, severe shadows, or handwriting styles unlike the IAM training set. The application also returns real line breaks between recognized lines.
+
+## Fine-tune the existing IAM model on your own handwriting
+
+The repository includes `finetune_iam.py` for adapting the existing CRNN-CTC checkpoint to **your handwriting and other writers**. It requires labelled line images: one cropped line per image and the exact text written in that image. Unlabelled photos alone are not sufficient for supervised fine-tuning; transcribe and correct each line first.
+
+1. Keep the original `iam_crnn_ctc.pth` in the project root. The script reads it but never overwrites it.
+2. Create a CSV manifest with the columns `image,text,group`. Paths may be absolute or relative to the CSV file. Use the same group for all lines from one page/document (or one writer when you want writer-independent validation). See `finetune_manifest.example.csv`.
+3. Put line crops in a local folder such as `data/my_handwriting/lines/`. Keep private images and manifests local; do not commit them.
+4. Install the dependencies and run a conservative CPU fine-tune:
+
+```powershell
+python -m pip install -r requirements.txt
+python finetune_iam.py --manifest data/my_handwriting/manifest.csv --checkpoint iam_crnn_ctc.pth --output iam_crnn_ctc_finetuned.pth --device cpu --epochs 12 --batch-size 2
+```
+
+The script splits by `group` (not by individual line) to reduce train/validation leakage, starts with a low learning rate, freezes the CNN for the first epoch by default, unfreezes it afterwards, clips gradients, and early-stops on validation character error rate (CER). It writes the best validation checkpoint to `iam_crnn_ctc_finetuned.pth`; the original remains untouched. You need at least two distinct groups. For a single writer, group by source page/document; for multiple writers, group by writer ID if the goal is to measure generalization to unseen writers. Aim for several pages per writer and keep a separate untouched test set for final evaluation.
+
+**Important:** this fine-tuned file is not automatically substituted into the running app. First evaluate it on held-out pages. To use it for inference, point the app's configured model/checkpoint path to the new file (or deliberately replace the local checkpoint after making a backup). Do not commit either checkpoint to Git.
