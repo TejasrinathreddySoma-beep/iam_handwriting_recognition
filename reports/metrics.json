@@ -1,0 +1,11 @@
+{
+  "model": "IAM CNN-BiLSTM-CTC",
+  "dataset": "IAM handwritten text lines",
+  "epochs_completed": 30,
+  "device": "NVIDIA GeForce RTX 3050 4GB Laptop GPU",
+  "test_loss": 0.4188375390650755,
+  "test_character_error_rate": 0.07794523521567898,
+  "best_validation_character_error_rate": 0.06738600558825278,
+  "best_validation_epoch": 25,
+  "metric_note": "Character error rate (CER); lower is better. Results are from the supplied training run."
+}
