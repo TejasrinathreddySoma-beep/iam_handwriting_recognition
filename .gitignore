@@ -1,17 +1,17 @@
-
 # Python
 __pycache__/
 *.py[cod]
 .venv/
+.env
 
-# IDE
+# IDE and OS
 .idea/
+.vscode/
+.DS_Store
+Thumbs.db
 
-# Dataset
+# IAM dataset (download separately; do not commit)
 data/
 
-# Generated model weights
-mnist_cnn.pth
-
-# Trained IAM model checkpoint (download/copy locally; do not commit)
+# Trained checkpoint (keep locally)
 iam_crnn_ctc.pth
