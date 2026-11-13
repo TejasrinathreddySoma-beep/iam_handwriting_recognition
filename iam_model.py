@@ -56,3 +56,16 @@ def greedy_decode(log_probs, input_lengths):
             previous = token
         decoded.append("".join(chars))
     return decoded
+
+
+
+def ctc_minimum_lengths(flat_targets, target_lengths):
+    """Minimum CTC time steps per sample, accounting for adjacent repeats."""
+    minimums = []
+    offset = 0
+    for length in target_lengths.detach().cpu().tolist():
+        target = flat_targets[offset:offset + length]
+        repeats = int((target[1:] == target[:-1]).sum().item()) if length > 1 else 0
+        minimums.append(int(length) + repeats)
+        offset += int(length)
+    return torch.tensor(minimums, dtype=torch.long, device=target_lengths.device)
