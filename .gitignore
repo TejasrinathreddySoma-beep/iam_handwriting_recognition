@@ -15,3 +15,8 @@ data/
 
 # Trained checkpoint (keep locally)
 iam_crnn_ctc.pth
+
+# Local language-model corpus and evaluation outputs
+language_model.txt
+decoder_comparison.json
+dist/
