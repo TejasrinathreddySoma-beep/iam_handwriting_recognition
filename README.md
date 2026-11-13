@@ -68,6 +68,18 @@ python train_iam.py --device auto --epochs 30 --batch-size 4
 
 Use `--device cuda` to require an NVIDIA GPU or `--device cpu` to train on CPU. The best checkpoint is saved as `iam_crnn_ctc.pth` in the project root. Resume with `--resume`.
 
+## Web application
+
+The project includes a standalone browser interface with page/line upload. The FastAPI backend can split a page into text-line regions and run the IAM recognizer on each crop.
+
+Start it from the repository root:
+
+```bash
+uvicorn web_app:app --reload
+```
+
+Open http://127.0.0.1:8000 in your browser. The trained checkpoint must be in the project root for recognition to run.
+
 ## Predict
 
 Put the trained `iam_crnn_ctc.pth` file in the project root and run:
