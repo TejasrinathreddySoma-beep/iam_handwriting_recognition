@@ -1,56 +1,81 @@
 # IAM Handwriting Recognition
 
-A standalone IAM handwritten text-line recognition project using a convolutional neural network (CNN), bidirectional LSTM (BiLSTM), and Connectionist Temporal Classification (CTC).
+Standalone handwritten text-line recognition using a CNN + bidirectional LSTM + Connectionist Temporal Classification (CTC) model trained on the IAM dataset.
+
+## Recorded training results
+
+The committed training run completed **30 epochs** on an NVIDIA GeForce RTX 3050 4GB Laptop GPU.
+
+| Metric | Result |
+|---|---:|
+| Best validation CER | **6.74%** (epoch 25) |
+| Held-out test CER | **7.79%** |
+| Test loss | **0.4188** |
+
+CER means character error rate (lower is better); it is not character accuracy. These figures are copied from the training branch's committed metrics.
+
+### Training curves
+
+- [IAM character error rate curve](reports/iam_cer_curve.png)
+- [IAM loss curve](reports/iam_loss_curve.png)
+
+Detailed logs and report:
+- [Epoch history](reports/iam_history.json)
+- [IAM metrics](reports/iam_metrics.json)
+- [Training summary](TRAINING_RESULTS.json)
+- [Training report](reports/report.md)
 
 ## Project files
 
-- `iam_model.py` — CRNN architecture, character vocabulary, and greedy CTC decoder.
-- `train_iam.py` — IAM line dataset loader, preprocessing, training, validation, early stopping, checkpointing, and test evaluation.
-- `requirements.txt` — Python dependencies for this project only.
+- `iam_model.py` — CNN feature extractor, BiLSTM sequence model, CTC output, character mapping, and greedy decoder.
+- `train_iam.py` — IAM dataset loading, preprocessing, training, validation, and test evaluation.
+- `predict_iam.py` — load a trained checkpoint and recognize a cropped text-line image.
+- `reports/` — training curves, metrics, and epoch history.
 
-## Dataset setup
+## Setup
 
-The IAM Lines dataset and its ASCII annotations/splits are not included in this repository. Obtain them from the official [IAM Handwriting Database](https://www.iam.unibe.ch/). Arrange the extracted files under `data/iam/` in one of these supported layouts:
-
-```text
-data/iam/
-├── lines.txt
-├── trainset.txt
-├── validationset1.txt
-├── testset.txt
-└── lines/
-    └── a01/a01-000u/a01-000u-00.png
-```
-
-or use `ascii/lines.txt` and `ascii/sets/{trainset,validationset1,testset}.txt` where supplied by the dataset package. The loader locates annotation and split files in these locations. Keep the dataset local; it is excluded by `.gitignore`.
-
-## Install and train
-
-Create and activate a Python virtual environment, then install dependencies:
+Install PyTorch separately using the official PyTorch installer for your OS and accelerator, then install the remaining dependencies:
 
 ```bash
 python -m venv .venv
-# Windows: .venv\\Scripts\\activate
-# macOS/Linux: source .venv/bin/activate
-python -m pip install -r requirements.txt
+# Windows:
+.venv\\Scripts\\activate
+# macOS/Linux:
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-Install the PyTorch build appropriate for your hardware from the [official PyTorch instructions](https://pytorch.org/get-started/locally/), then run:
+## Dataset layout
+
+Download the IAM Lines images and the matching ASCII annotation and official split files from the IAM Handwriting Database. Extract them under:
+
+```
+data/iam/
+  lines.txt
+  lines/
+  trainset.txt
+  validationset1.txt
+  testset.txt
+```
+
+The loader also supports annotation/split files under `ascii/` and `ascii/sets/`. Dataset files are not included in this repository.
+
+## Train
 
 ```bash
-python train_iam.py
+python train_iam.py --device auto --epochs 30 --batch-size 4
 ```
 
-The script automatically selects Intel XPU, CUDA, or CPU when available. Training uses the IAM train split, selects the best checkpoint by validation character error rate (CER), applies early stopping, and evaluates the selected checkpoint on the test split. The checkpoint is written to `iam_crnn_ctc.pth` (ignored by Git).
+Use `--device cuda` to require an NVIDIA GPU or `--device cpu` to train on CPU. The best checkpoint is saved as `iam_crnn_ctc.pth` in the project root. Resume with `--resume`.
 
-## Evaluation and results
+## Predict
 
-Training prints per-epoch training/validation loss and CER, followed by test loss and test CER. The original project version did not save a separate metrics CSV/JSON, plot, or report file, and no trained checkpoint or IAM dataset was present in the source repository for transfer. Consequently, this repository does not claim a measured accuracy/CER result. Run training locally to generate fresh evaluation results.
+Put the trained `iam_crnn_ctc.pth` file in the project root and run:
 
-## Model overview
+```bash
+python predict_iam.py path/to/cropped_line.png
+```
 
-Grayscale line images are resized to a height of 64 pixels while preserving aspect ratio. A CNN extracts visual features, a two-layer bidirectional LSTM models the horizontal sequence, and a linear layer produces character logits for CTC training. Decoding uses greedy CTC collapse (removing blanks and repeated adjacent labels).
+**Checkpoint note:** the source branch excludes `iam_crnn_ctc.pth` via `.gitignore`; it was not present in the tracked tree, so it has not been transferred. Use the locally saved checkpoint from your completed training run for inference.
 
-## Scope
-
-This repository contains only the IAM line-recognition code. The separate MNIST/EMNIST digit and character-recognition project remains in `num_pred_cnn`.
+This recognizer processes one cropped handwritten text line at a time. Full-page line segmentation and paragraph reconstruction are not included.
