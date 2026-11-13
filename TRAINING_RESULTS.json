@@ -1,0 +1,10 @@
+{
+  "checkpoint": "iam_crnn_ctc.pth",
+  "purpose": "Trained IAM CNN-BiLSTM-CTC handwritten text-line recognizer",
+  "training_device": "NVIDIA GeForce RTX 3050 4GB Laptop GPU",
+  "epochs_completed": 30,
+  "best_validation_CER": 0.06738600558825278,
+  "test_CER": 0.07794523521567898,
+  "test_loss": 0.4188375390650755,
+  "note": "This checkpoint recognizes cropped text lines, not complete page layouts."
+}
