@@ -450,7 +450,7 @@ def make_export_file(text: str, filename: str, export_format: str) -> bytes:
             for char in value:
                 code = ord(char)
                 if char in "\\\\{}":
-                    out.append("\\\\" + char)
+                    out.append("\\" + char)
                 elif char == "\n":
                     out.append("\\par\n")
                 elif code < 128:
