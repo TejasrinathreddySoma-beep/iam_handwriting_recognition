@@ -1,0 +1,309 @@
+{
+  "test_loss": 0.4188375390650755,
+  "test_cer": 0.07794523521567898,
+  "best_validation_cer": 0.06738600558825278,
+  "device": "cuda",
+  "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+  "epochs": [
+    {
+      "epoch": 1,
+      "seconds": 222.33976039999993,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 2.0062612560622366,
+      "valid_loss": 1.032680743040248,
+      "train_cer": 0.6105692638095198,
+      "valid_cer": 0.29097556625646515
+    },
+    {
+      "epoch": 2,
+      "seconds": 210.05259079999996,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.6651615539270134,
+      "valid_loss": 0.5183514763008464,
+      "train_cer": 0.19117117639026246,
+      "valid_cer": 0.14621603947446643
+    },
+    {
+      "epoch": 3,
+      "seconds": 207.5884606999998,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.45286236003426167,
+      "valid_loss": 0.5201597615359301,
+      "train_cer": 0.13165441130830952,
+      "valid_cer": 0.1511206230307354
+    },
+    {
+      "epoch": 4,
+      "seconds": 335.80720189999965,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.35419879727807874,
+      "valid_loss": 0.41673173129877306,
+      "train_cer": 0.10388019680298598,
+      "valid_cer": 0.118126151834017
+    },
+    {
+      "epoch": 5,
+      "seconds": 223.97884539999995,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.293641731852315,
+      "valid_loss": 0.40500795940823736,
+      "train_cer": 0.08670752245896145,
+      "valid_cer": 0.11672908863920099
+    },
+    {
+      "epoch": 6,
+      "seconds": 212.73346059999994,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.24830212718171388,
+      "valid_loss": 0.3498344854675831,
+      "train_cer": 0.07417353918473246,
+      "valid_cer": 0.09714047916295107
+    },
+    {
+      "epoch": 7,
+      "seconds": 213.16656379999995,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.21966217319133977,
+      "valid_loss": 0.3938872868165294,
+      "train_cer": 0.0657320317963445,
+      "valid_cer": 0.1106949646275489
+    },
+    {
+      "epoch": 8,
+      "seconds": 213.11673440000004,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.18944755347782397,
+      "valid_loss": 0.3789272244999753,
+      "train_cer": 0.05669879129200581,
+      "valid_cer": 0.11334046727305154
+    },
+    {
+      "epoch": 9,
+      "seconds": 213.00912310000012,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.16339098286722198,
+      "valid_loss": 1.2678489721713857,
+      "train_cer": 0.049527648005693876,
+      "valid_cer": 0.3549432257297426
+    },
+    {
+      "epoch": 10,
+      "seconds": 212.62053939999987,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.1029294644087223,
+      "valid_loss": 0.3944391442891111,
+      "train_cer": 0.030596326289088524,
+      "valid_cer": 0.10480946436002615
+    },
+    {
+      "epoch": 11,
+      "seconds": 212.86494180000045,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.08283360423966968,
+      "valid_loss": 0.3370143279512936,
+      "train_cer": 0.024426577506693206,
+      "valid_cer": 0.0870935140598062
+    },
+    {
+      "epoch": 12,
+      "seconds": 214.36792670000068,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.06789651701151225,
+      "valid_loss": 0.28661258670596035,
+      "train_cer": 0.019903750263797107,
+      "valid_cer": 0.07398489982759646
+    },
+    {
+      "epoch": 13,
+      "seconds": 212.7962176000001,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.05903650320794887,
+      "valid_loss": 0.3091671385050298,
+      "train_cer": 0.01744164394218395,
+      "valid_cer": 0.07885975863503954
+    },
+    {
+      "epoch": 14,
+      "seconds": 214.2086750999997,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.05000230024286934,
+      "valid_loss": 0.5497560177177669,
+      "train_cer": 0.014574014226422747,
+      "valid_cer": 0.14116283217406814
+    },
+    {
+      "epoch": 15,
+      "seconds": 214.3799027999994,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.044378873190199924,
+      "valid_loss": 0.3352836867306322,
+      "train_cer": 0.013005714569462434,
+      "valid_cer": 0.07883003388621367
+    },
+    {
+      "epoch": 16,
+      "seconds": 213.19690429999991,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.024492756275346715,
+      "valid_loss": 0.3091637637257018,
+      "train_cer": 0.006186300757666668,
+      "valid_cer": 0.07095297544735747
+    },
+    {
+      "epoch": 17,
+      "seconds": 213.2710348999999,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.017570523376837784,
+      "valid_loss": 0.3278935876137074,
+      "train_cer": 0.004067647922934003,
+      "valid_cer": 0.07214196540039236
+    },
+    {
+      "epoch": 18,
+      "seconds": 213.85196089999954,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.015794075313934924,
+      "valid_loss": 0.3449375033303896,
+      "train_cer": 0.0038400582629529553,
+      "valid_cer": 0.07446049580881041
+    },
+    {
+      "epoch": 19,
+      "seconds": 213.56985970000005,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.014078844828974469,
+      "valid_loss": 0.3430115626826086,
+      "train_cer": 0.003364188973901673,
+      "valid_cer": 0.07344985434873075
+    },
+    {
+      "epoch": 20,
+      "seconds": 212.50574830000005,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.007953450088049853,
+      "valid_loss": 0.328900811013412,
+      "train_cer": 0.0016014036075030103,
+      "valid_cer": 0.06771297782533738
+    },
+    {
+      "epoch": 21,
+      "seconds": 212.65454919999956,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.006272239003947341,
+      "valid_loss": 0.34029664979490604,
+      "train_cer": 0.0011627762628122634,
+      "valid_cer": 0.06750490458355626
+    },
+    {
+      "epoch": 22,
+      "seconds": 213.79223939999974,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.005391285475558254,
+      "valid_loss": 0.33668726625887146,
+      "train_cer": 0.0009434625904668898,
+      "valid_cer": 0.06786160156946673
+    },
+    {
+      "epoch": 23,
+      "seconds": 229.35914070000035,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.004685928766156901,
+      "valid_loss": 0.36179074814373796,
+      "train_cer": 0.0008275987635674473,
+      "valid_cer": 0.06991260923845194
+    },
+    {
+      "epoch": 24,
+      "seconds": 216.80395969999972,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.004388021947904078,
+      "valid_loss": 0.35418489075858484,
+      "train_cer": 0.0007407008933928653,
+      "valid_cer": 0.0688722430295464
+    },
+    {
+      "epoch": 25,
+      "seconds": 217.7760943000003,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.003059677963103838,
+      "valid_loss": 0.35098449383080405,
+      "train_cer": 0.00040552339414804913,
+      "valid_cer": 0.06738600558825278
+    },
+    {
+      "epoch": 26,
+      "seconds": 216.14274010000008,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.002371769026491011,
+      "valid_loss": 0.3567776694385843,
+      "train_cer": 0.0002524176228880714,
+      "valid_cer": 0.06771297782533738
+    },
+    {
+      "epoch": 27,
+      "seconds": 217.13948419999997,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.0021521702944365504,
+      "valid_loss": 0.36658305246731576,
+      "train_cer": 0.00018620972180267563,
+      "valid_cer": 0.06836692229950657
+    },
+    {
+      "epoch": 28,
+      "seconds": 218.58111740000004,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.001772544675676764,
+      "valid_loss": 0.36914088862405264,
+      "train_cer": 0.0001282778083529543,
+      "valid_cer": 0.06806967481124784
+    },
+    {
+      "epoch": 29,
+      "seconds": 216.17199869999877,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.0015373027705141975,
+      "valid_loss": 0.368320849710418,
+      "train_cer": 0.0001034498454459309,
+      "valid_cer": 0.06753462933238213
+    },
+    {
+      "epoch": 30,
+      "seconds": 217.48829389999992,
+      "device": "cuda",
+      "device_name": "CUDA GPU (NVIDIA GeForce RTX 3050 4GB Laptop GPU)",
+      "train_loss": 0.0013763309907141516,
+      "valid_loss": 0.3751596910181769,
+      "train_cer": 8.689787017458196e-05,
+      "valid_cer": 0.0680102253135961
+    }
+  ]
+}
