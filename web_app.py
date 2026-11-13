@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps
 from pytesseract import Output, TesseractNotFoundError
 
-from iam_image import split_page_into_lines, deskew_image
+from iam_image import split_page_into_lines, deskew_image, rectify_page, remove_notebook_lines
 from predict_iam import DEFAULT_MODEL_PATH, get_inference_device, load_model, predict_line_details
 
 ROOT = Path(__file__).resolve().parent
@@ -310,6 +310,7 @@ def save_to_library(filename: str, extension: str, contents: bytes, extracted: s
 
 def recognize_handwriting_image(image: Image.Image):
     model, device = get_model_and_device()
+    image = rectify_page(image)
     width, height = image.size
     if width >= 3 * height and height <= 350:
         crops = [image]
@@ -317,7 +318,7 @@ def recognize_handwriting_image(image: Image.Image):
         crops = split_page_into_lines(image)
         if not crops:
             crops = [deskew_image(image)]
-    results = [predict_line_details(model, crop, device=device, decoder="greedy") for crop in crops]
+    results = [predict_line_details(model, crop, device=device, decoder="beam", beam_width=15) for crop in crops]
     return "\\n".join(item.get("text", "") for item in results), "IAM CRNN-CTC"
 
 
