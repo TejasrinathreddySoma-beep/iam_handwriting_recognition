@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw
 
 from iam_decoder import CharacterNGramLM, greedy_decode_with_confidence, prefix_beam_search
 from iam_image import deskew_image, estimate_skew_angle, split_page_into_lines
-from iam_model import BLANK_ID, CHAR_TO_ID, IAMCRNN
+from iam_model import BLANK_ID, CHAR_TO_ID, IAMCRNN, ctc_minimum_lengths
 from predict_iam import preprocess_line, predict_line_details
 from train_iam import read_annotations, read_split
 
@@ -99,3 +99,10 @@ def test_beam_search_rejects_invalid_width():
     logits = torch.zeros((3, len(CHAR_TO_ID) + 1)).log_softmax(dim=-1)
     with pytest.raises(ValueError):
         prefix_beam_search(logits, 3, beam_width=0)
+
+
+
+def test_ctc_minimum_lengths_include_repeated_adjacent_labels():
+    targets = torch.tensor([CHAR_TO_ID["l"], CHAR_TO_ID["l"], CHAR_TO_ID["a"], CHAR_TO_ID["b"], CHAR_TO_ID["b"]])
+    lengths = torch.tensor([2, 3])
+    assert ctc_minimum_lengths(targets, lengths).tolist() == [3, 4]
