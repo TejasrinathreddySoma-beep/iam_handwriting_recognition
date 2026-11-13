@@ -216,14 +216,14 @@ def extract_document_text(path: Path, extension: str) -> str:
         pages = []
         for page in reader.pages:
             pages.append(page.extract_text() or "")
-        return "\\n\\n".join(pages).strip()
+        return "\n\n".join(pages).strip()
     if extension == ".docx":
         doc = WordDocument(str(path))
         parts = [p.text for p in doc.paragraphs if p.text.strip()]
         for table in doc.tables:
             for row in table.rows:
                 parts.append(" | ".join(cell.text.strip() for cell in row.cells))
-        return "\\n".join(parts).strip()
+        return "\n".join(parts).strip()
     return path.read_text(encoding="utf-8", errors="replace").strip()
 
 
@@ -231,7 +231,7 @@ def document_row(row):
     return {
         "id": row[0], "filename": row[1], "extension": row[2],
         "size_bytes": row[3], "uploaded_at": row[4],
-        "preview": (row[5][:280].replace("\\n", " ") + ("…" if len(row[5]) > 280 else "")),
+        "preview": (row[5][:280].replace("\n", " ") + ("…" if len(row[5]) > 280 else "")),
     }
 
 
